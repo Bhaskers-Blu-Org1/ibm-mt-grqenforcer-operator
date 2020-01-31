@@ -145,9 +145,14 @@ image: build build-push-image
 config-docker:
 	@docker login "$(IMAGE_REPO)" -u "${DOCKER_USERNAME}" -p "${DOCKER_PASSWORD}"
 
-build-push-image: config-docker
+#IBMDEV Move build PRIOR to config-docker to ensure it builds whether the login and push are successful or not
+build-image:
 	@docker build . -f Dockerfile -t $(IMAGE_REPO)/$(IMAGE_NAME)-$(BUILD_ARCH):$(RELEASE_TAG)
 	@docker tag $(IMAGE_REPO)/$(IMAGE_NAME)-$(BUILD_ARCH):$(RELEASE_TAG) $(IMAGE_REPO)/$(IMAGE_NAME)-$(BUILD_ARCH):latest
+
+build-push-image: build-image config-docker
+	#@docker build . -f Dockerfile -t $(IMAGE_REPO)/$(IMAGE_NAME)-$(BUILD_ARCH):$(RELEASE_TAG)
+	#@docker tag $(IMAGE_REPO)/$(IMAGE_NAME)-$(BUILD_ARCH):$(RELEASE_TAG) $(IMAGE_REPO)/$(IMAGE_NAME)-$(BUILD_ARCH):latest
 	@docker push $(IMAGE_REPO)/$(IMAGE_NAME)-$(BUILD_ARCH):$(RELEASE_TAG)
 	@docker push $(IMAGE_REPO)/$(IMAGE_NAME)-$(BUILD_ARCH):latest
 	@docker logout "$(IMAGE_REPO)"
