@@ -17,8 +17,12 @@
 #DOCKER_PASSWORD ?= ${DOCKER_PASSWORD}
 DOCKER_USERNAME = $(shell printenv DOCKER_USERNAME)
 DOCKER_PASSWORD = $(shell printenv DOCKER_PASSWORD)
-
-
+ifeq ($(DOCKER_USERNAME),)
+	DOCKER_USERNAME = "dummyval"
+endif
+ifeq ($(DOCKER_PASSWORD),)
+	DOCKER_PASSWORD = "dummyval"
+endif
 
 # Image URL to use all building/pushing image targets;
 # Use your own docker registry and image name for dev/test by overridding the
