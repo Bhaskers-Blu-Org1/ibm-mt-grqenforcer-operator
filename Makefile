@@ -108,7 +108,6 @@ fmt: format-go format-protos format-python
 ############################################################
 
 check: lint
-	@echo "PTEST: ${PTEST}"
 
 # All available linters: lint-dockerfiles lint-scripts lint-yaml lint-copyright-banner lint-go lint-python lint-helm lint-markdown lint-sass lint-typescript lint-protos
 # Default value will run all linters, override these make target with your requirements:
