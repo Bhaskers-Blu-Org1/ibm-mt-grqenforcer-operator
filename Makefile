@@ -12,8 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-DOCKER_USERNAME ?= ${DOCKER_USERNAME}
-DOCKER_PASSWORD ?= ${DOCKER_PASSWORD}
+#IBMDEV Workaround these variables not being set -- not clear how these variables would normally be created with correct values.
+#DOCKER_USERNAME ?= ${DOCKER_USERNAME}
+#DOCKER_PASSWORD ?= ${DOCKER_PASSWORD}
+DOCKER_USERNAME = $(shell printenv DOCKER_USERNAME)
+DOCKER_PASSWORD = $(shell printenv DOCKER_PASSWORD)
+
+
 
 # Image URL to use all building/pushing image targets;
 # Use your own docker registry and image name for dev/test by overridding the
