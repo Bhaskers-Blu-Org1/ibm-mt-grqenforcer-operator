@@ -43,6 +43,7 @@ make build
 <!-- IBMDEV Add export of DOCKER_USERNAME and DOCKER_PASSWORD -->
 <!-- IBMDEV this section seems completely wrong -- Makefile uses IMAGE_REPO and IMAGE_NAME, not REGISTRY and IMG -->
 <!-- IBMDEV replace REGISTRY and IMG with IMAGE_REPO and IMAGE_NAME -->
+
 ```bash
 export IMAGE_NAME=<YOUR_CUSTOMIZED_IMAGE_NAME>
 export IMAGE_REPO=<YOUR_CUSTOMIZED_IMAGE_REGISTRY>
