@@ -141,5 +141,6 @@ jobs:
     #     - make multiarch-image
 
 # TBD. Suppressing for now.
+#IBMDEV Fix indentation of 'email: false' to avoid `make check` failure
 notifications:
-email: false
+  email: false

@@ -39,9 +39,15 @@ make build
 
 - Build and push the docker image for local development.
 
+<!-- IBMDEV Correct build-push-images to build-push-image (no 's') -->
+<!-- IBMDEV Add export of DOCKER_USERNAME and DOCKER_PASSWORD -->
+<!-- IBMDEV this section seems completely wrong -- Makefile uses IMAGE_REPO and IMAGE_NAME, not REGISTRY and IMG -->
+<!-- IBMDEV replace REGISTRY and IMG with IMAGE_REPO and IMAGE_NAME -->
 ```bash
-export IMG=<YOUR_CUSTOMIZED_IMAGE_NAME>
-export REGISTRY=<YOUR_CUSTOMIZED_IMAGE_REGISTRY>
+export IMAGE_NAME=<YOUR_CUSTOMIZED_IMAGE_NAME>
+export IMAGE_REPO=<YOUR_CUSTOMIZED_IMAGE_REGISTRY>
+export DOCKER_USERNAME=<YOUR_DOCKER_USERNAME>
+export DOCKER_PASSWORD=<YOUR_DOCKER_PASSWORD>
 make build-push-images
 ```
 
