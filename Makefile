@@ -1,0 +1,157 @@
+# Copyright 2019 The Kubernetes Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+DOCKER_USERNAME ?= ${DOCKER_USERNAME}
+DOCKER_PASSWORD ?= ${DOCKER_PASSWORD}
+
+# Image URL to use all building/pushing image targets;
+# Use your own docker registry and image name for dev/test by overridding the
+# IMAGE_REPO, IMAGE_NAME and RELEASE_TAG environment variable.
+#IBMDEV Switch to opencloudio and grqe image name
+IMAGE_REPO ?= quay.io/opencloudio
+IMAGE_NAME ?= ibm-mt-grqe-operator-image
+
+# Github host to use for checking the source tree;
+# Override this variable ue with your own value if you're working on forked repo.
+GIT_HOST ?= github.com/IBM
+
+PWD := $(shell pwd)
+BASE_DIR := $(shell basename $(PWD))
+
+# Keep an existing GOPATH, make a private one if it is undefined
+GOPATH_DEFAULT := $(PWD)/.go
+export GOPATH ?= $(GOPATH_DEFAULT)
+GOBIN_DEFAULT := $(GOPATH)/bin
+export GOBIN ?= $(GOBIN_DEFAULT)
+TESTARGS_DEFAULT := "-v"
+export TESTARGS ?= $(TESTARGS_DEFAULT)
+DEST := $(GOPATH)/src/$(GIT_HOST)/$(BASE_DIR)
+RELEASE_TAG ?= $(shell git describe --exact-match 2> /dev/null || \
+                 git describe --match=$(git rev-parse --short=8 HEAD) --always --dirty --abbrev=8)
+
+LOCAL_OS := $(shell uname)
+ifeq ($(LOCAL_OS),Linux)
+    TARGET_OS ?= linux
+    XARGS_FLAGS="-r"
+else ifeq ($(LOCAL_OS),Darwin)
+    TARGET_OS ?= darwin
+    XARGS_FLAGS=
+else
+    $(error "This system's OS $(LOCAL_OS) isn't recognized/supported")
+endif
+
+ARCH := $(shell uname -m)
+BUILD_ARCH := "amd64"
+ifeq ($(ARCH),x86_64)
+    BUILD_ARCH="amd64"
+else ifeq ($(ARCH),ppc64le)
+    BUILD_ARCH="ppc64le"
+else ifeq ($(ARCH),s390x)
+    BUILD_ARCH="s390x"
+else
+    $(error "This system's ARCH $(ARCH) isn't recognized/supported")
+endif
+
+.PHONY: all work fmt check coverage lint test build image build-push-image multiarch-image clean
+
+all: fmt check test coverage build image
+
+ifeq (,$(wildcard go.mod))
+ifneq ("$(realpath $(DEST))", "$(realpath $(PWD))")
+    $(error Please run 'make' from $(DEST). Current directory is $(PWD))
+endif
+endif
+
+include common/Makefile.common.mk
+
+
+############################################################
+# work section
+############################################################
+$(GOBIN):
+	@echo "create gobin"
+	@mkdir -p $(GOBIN)
+
+work: $(GOBIN)
+
+############################################################
+# format section
+############################################################
+
+# All available format: format-go format-protos format-python
+# Default value will run all formats, override these make target with your requirements:
+#    eg: fmt: format-go format-protos
+fmt: format-go format-protos format-python
+
+############################################################
+# check section
+############################################################
+
+check: lint
+
+# All available linters: lint-dockerfiles lint-scripts lint-yaml lint-copyright-banner lint-go lint-python lint-helm lint-markdown lint-sass lint-typescript lint-protos
+# Default value will run all linters, override these make target with your requirements:
+#    eg: lint: lint-go lint-yaml
+# The MARKDOWN_LINT_WHITELIST variable can be set with comma separated urls you want to whitelist
+lint: lint-all
+
+############################################################
+# test section
+############################################################
+
+test:
+	@go test ${TESTARGS} ./...
+
+############################################################
+# coverage section
+############################################################
+
+coverage:
+	@common/scripts/codecov.sh
+
+############################################################
+# build section
+############################################################
+#IBMDEV Switch to ibm-mt-grqenforcer-operator binary name
+build:
+	@common/scripts/gobuild.sh ibm-mt-grqenforcer-operator ./cmd
+
+############################################################
+# image section
+############################################################
+
+image: build build-push-image
+
+config-docker:
+	@docker login "$(IMAGE_REPO)" -u "${DOCKER_USERNAME}" -p "${DOCKER_PASSWORD}"
+
+build-push-image: config-docker
+	@docker build . -f Dockerfile -t $(IMAGE_REPO)/$(IMAGE_NAME)-$(BUILD_ARCH):$(RELEASE_TAG)
+	@docker tag $(IMAGE_REPO)/$(IMAGE_NAME)-$(BUILD_ARCH):$(RELEASE_TAG) $(IMAGE_REPO)/$(IMAGE_NAME)-$(BUILD_ARCH):latest
+	@docker push $(IMAGE_REPO)/$(IMAGE_NAME)-$(BUILD_ARCH):$(RELEASE_TAG)
+	@docker push $(IMAGE_REPO)/$(IMAGE_NAME)-$(BUILD_ARCH):latest
+	@docker logout "$(IMAGE_REPO)"
+
+############################################################
+# multiarch-image section
+############################################################
+
+multiarch-image: config-docker multi-arch
+
+############################################################
+# clean section
+############################################################
+#IBMDEV Switch to grqe binary name
+clean:
+	@rm -f ibm-mt-grqenforcer-operator
