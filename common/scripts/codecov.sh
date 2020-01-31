@@ -149,5 +149,6 @@ fi
 
 # Upload to codecov.io in post submit only for visualization
 if [ "${TRAVIS}" == true ]; then
-  bash <(curl -s https://codecov.io/bash) -t "${CODECOV_TOKEN}" -f "${REPORT_PATH}/coverage.cov"
+  #IBMDEV Prevent failure if CODECOV_TOKEN is not defined
+  bash <(curl -s https://codecov.io/bash) -t "${CODECOV_TOKEN:-DUMMYTOKEN}" -f "${REPORT_PATH}/coverage.cov"
 fi
