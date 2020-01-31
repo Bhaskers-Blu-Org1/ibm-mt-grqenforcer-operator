@@ -17,8 +17,12 @@
 #DOCKER_PASSWORD ?= ${DOCKER_PASSWORD}
 DOCKER_USERNAME = $(shell printenv DOCKER_USERNAME)
 DOCKER_PASSWORD = $(shell printenv DOCKER_PASSWORD)
-
-
+ifeq ($(DOCKER_USERNAME),)
+	DOCKER_USERNAME = "dummyval"
+endif
+ifeq ($(DOCKER_PASSWORD),)
+	DOCKER_PASSWORD = "dummyval"
+endif
 
 # Image URL to use all building/pushing image targets;
 # Use your own docker registry and image name for dev/test by overridding the
@@ -104,6 +108,7 @@ fmt: format-go format-protos format-python
 ############################################################
 
 check: lint
+	@echo "PTEST: ${PTEST}"
 
 # All available linters: lint-dockerfiles lint-scripts lint-yaml lint-copyright-banner lint-go lint-python lint-helm lint-markdown lint-sass lint-typescript lint-protos
 # Default value will run all linters, override these make target with your requirements:
