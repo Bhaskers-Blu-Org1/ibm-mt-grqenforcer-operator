@@ -13,14 +13,22 @@
 # limitations under the License.
 
 ############################################################
-# install git hooks
+# GKE section
 ############################################################
-INSTALL_HOOKS := $(shell find .git/hooks -type l -exec rm {} \; && \
-                         find common/scripts/.githooks -type f -exec ln -sf ../../{} .git/hooks/ \; )
+PROJECT ?= oceanic-guard-191815
+ZONE    ?= us-west1-a
+CLUSTER ?= prow
 
-############################################################
-# lint section
-############################################################
+activate-serviceaccount:
+ifdef GOOGLE_APPLICATION_CREDENTIALS
+	gcloud auth activate-service-account --key-file="$(GOOGLE_APPLICATION_CREDENTIALS)"
+endif
+
+get-cluster-credentials: activate-serviceaccount
+	gcloud container clusters get-credentials "$(CLUSTER)" --project="$(PROJECT)" --zone="$(ZONE)"
+
+config-docker: get-cluster-credentials
+	@common/scripts/config_docker.sh
 
 FINDFILES=find . \( -path ./.git -o -path ./.github \) -prune -o -type f
 XARGS = xargs -0 ${XARGS_FLAGS}
@@ -36,7 +44,7 @@ lint-yaml:
 	@${FINDFILES} \( -name '*.yml' -o -name '*.yaml' \) -print0 | ${XARGS} grep -L -e "{{" | ${CLEANXARGS} yamllint -c ./common/config/.yamllint.yml
 
 lint-helm:
-	@${FINDFILES} -name 'Chart.yaml' -print0 | ${XARGS} -L 1 dirname | ${CLEANXARGS} helm lint --strict
+	@${FINDFILES} -name 'Chart.yaml' -print0 | ${XARGS} -L 1 dirname | ${CLEANXARGS} helm lint
 
 lint-copyright-banner:
 	@${FINDFILES} \( -name '*.go' -o -name '*.cc' -o -name '*.h' -o -name '*.proto' -o -name '*.py' -o -name '*.sh' \) \( ! \( -name '*.gen.go' -o -name '*.pb.go' -o -name '*_pb2.py' \) \) -print0 |\
@@ -50,71 +58,26 @@ lint-python:
 
 lint-markdown:
 	@${FINDFILES} -name '*.md' -print0 | ${XARGS} mdl --ignore-front-matter --style common/config/mdl.rb
-ifdef MARKDOWN_LINT_WHITELIST
 	@${FINDFILES} -name '*.md' -print0 | ${XARGS} awesome_bot --skip-save-results --allow_ssl --allow-timeout --allow-dupe --allow-redirect --white-list ${MARKDOWN_LINT_WHITELIST}
-else
-	@${FINDFILES} -name '*.md' -print0 | ${XARGS} awesome_bot --skip-save-results --allow_ssl --allow-timeout --allow-dupe --allow-redirect
-endif
 
-# lint-sass:
-# 	@${FINDFILES} -name '*.scss' -print0 | ${XARGS} sass-lint -c common/config/sass-lint.yml --verbose
+lint-sass:
+	@${FINDFILES} -name '*.scss' -print0 | ${XARGS} sass-lint -c common/config/sass-lint.yml --verbose
 
-# lint-typescript:
-# 	@${FINDFILES} -name '*.ts' -print0 | ${XARGS} tslint -c common/config/tslint.json
+lint-typescript:
+	@${FINDFILES} -name '*.ts' -print0 | ${XARGS} tslint -c common/config/tslint.json
 
-# lint-protos:
-# 	@$(FINDFILES) -name '*.proto' -print0 | $(XARGS) -L 1 prototool lint --protoc-bin-path=/usr/bin/protoc
+lint-protos:
+	@$(FINDFILES) -name '*.proto' -print0 | $(XARGS) -L 1 prototool lint --protoc-bin-path=/usr/bin/protoc
 
-lint-all: lint-dockerfiles lint-scripts lint-yaml lint-helm lint-copyright-banner lint-go lint-python lint-markdown
+lint-all: lint-dockerfiles lint-scripts lint-yaml lint-helm lint-copyright-banner lint-go lint-python lint-markdown lint-sass lint-typescript lint-protos
 
-# format-go:
-# 	@${FINDFILES} -name '*.go' \( ! \( -name '*.gen.go' -o -name '*.pb.go' \) \) -print0 | ${XARGS} goimports -w -local "github.com/IBM"
+format-go:
+	@${FINDFILES} -name '*.go' \( ! \( -name '*.gen.go' -o -name '*.pb.go' \) \) -print0 | ${XARGS} goimports -w -local "github.com/IBM"
 
-# format-python:
-# 	@${FINDFILES} -name '*.py' -print0 | ${XARGS} autopep8 --max-line-length 160 --aggressive --aggressive -i
+format-python:
+	@${FINDFILES} -name '*.py' -print0 | ${XARGS} autopep8 --max-line-length 160 --aggressive --aggressive -i
 
-# format-protos:
-# 	@$(FINDFILES) -name '*.proto' -print0 | $(XARGS) -L 1 prototool format -w
+format-protos:
+	@$(FINDFILES) -name '*.proto' -print0 | $(XARGS) -L 1 prototool format -w
 
-.PHONY: lint-dockerfiles lint-scripts lint-yaml lint-helm lint-copyright-banner lint-go lint-python lint-markdown lint-all
-
-############################################################
-# multiarch image section
-############################################################
-MANIFEST_VERSION ?= v1.0.0
-HAS_MANIFEST_TOOL := $(shell command -v manifest-tool)
-
-DEFAULT_PPC64LE_IMAGE ?= ibmcom/pause-ppc64le:3.0
-IMAGE_NAME_PPC64LE ?= ${IMAGE_REPO}/${IMAGE_NAME}-ppc64le:${RELEASE_TAG}
-DEFAULT_S390X_IMAGE ?= ibmcom/pause-s390x:3.0
-IMAGE_NAME_S390X ?= ${IMAGE_REPO}/${IMAGE_NAME}-s390x:${RELEASE_TAG}
-
-manifest-tool:
-ifeq ($(ARCH), x86_64)
-	$(eval MANIFEST_TOOL_NAME = manifest-tool-linux-amd64)
-else
-	$(eval MANIFEST_TOOL_NAME = manifest-tool-linux-$(ARCH))
-endif
-ifndef HAS_MANIFEST_TOOL
-	sudo curl -sSL -o /usr/local/bin/manifest-tool https://github.com/estesp/manifest-tool/releases/download/${MANIFEST_VERSION}/${MANIFEST_TOOL_NAME}
-	sudo chmod +x /usr/local/bin/manifest-tool
-endif
-
-ppc64le-fix: manifest-tool
-	@sudo manifest-tool inspect $(IMAGE_NAME_PPC64LE) \
-		|| (docker pull $(DEFAULT_PPC64LE_IMAGE) \
-		&& docker tag $(DEFAULT_PPC64LE_IMAGE) $(IMAGE_NAME_PPC64LE) \
-		&& docker push $(IMAGE_NAME_PPC64LE))
-
-s390x-fix: manifest-tool
-	@sudo manifest-tool inspect $(IMAGE_NAME_S390X) \
-		|| (docker pull $(DEFAULT_S390X_IMAGE) \
-		&& docker tag $(DEFAULT_S390X_IMAGE) $(IMAGE_NAME_S390X) \
-		&& docker push $(IMAGE_NAME_S390X))
-
-multi-arch: manifest-tool ppc64le-fix s390x-fix
-	@cp ./common/manifest.yaml /tmp/manifest.yaml
-	@sed -i -e "s|__RELEASE_TAG__|$(RELEASE_TAG)|g" -e "s|__IMAGE_NAME__|$(IMAGE_NAME)|g" -e "s|__IMAGE_REPO__|$(IMAGE_REPO)|g" /tmp/manifest.yaml
-	@sudo manifest-tool push from-spec /tmp/manifest.yaml
-
-.PHONY: manifest-tool ppc64le-fix s390x-fix multi-arch
+.PHONY: lint-dockerfiles lint-scripts lint-yaml lint-copyright-banner lint-go lint-python lint-helm lint-markdown lint-sass lint-typescript lint-protos lint-all format-go format-python format-protos config-docker
