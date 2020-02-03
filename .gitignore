@@ -16,3 +16,4 @@
 
 #IBMDEV Ignore ibm-mt-grqenforcer-operator binary
 ibm-mt-grqenforcer-operator
+.go/
