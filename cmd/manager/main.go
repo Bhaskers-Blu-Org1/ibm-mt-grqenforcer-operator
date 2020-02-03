@@ -155,8 +155,18 @@ func addMetrics(ctx context.Context, cfg *rest.Config, namespace string) {
 
 	// Add to the below struct any other metrics ports you want to expose.
 	servicePorts := []v1.ServicePort{
-		{Port: metricsPort, Name: metrics.OperatorPortName, Protocol: v1.ProtocolTCP, TargetPort: intstr.IntOrString{Type: intstr.Int, IntVal: metricsPort}},
-		{Port: operatorMetricsPort, Name: metrics.CRPortName, Protocol: v1.ProtocolTCP, TargetPort: intstr.IntOrString{Type: intstr.Int, IntVal: operatorMetricsPort}},
+		{
+			Port:       metricsPort,
+			Name:       metrics.OperatorPortName,
+			Protocol:   v1.ProtocolTCP,
+			TargetPort: intstr.IntOrString{Type: intstr.Int, IntVal: metricsPort},
+		},
+		{
+			Port:       operatorMetricsPort,
+			Name:       metrics.CRPortName,
+			Protocol:   v1.ProtocolTCP,
+			TargetPort: intstr.IntOrString{Type: intstr.Int, IntVal: operatorMetricsPort},
+		},
 	}
 
 	// Create Service object to expose the metrics port(s).
@@ -188,17 +198,11 @@ func serveCRMetrics(cfg *rest.Config) error {
 	if err != nil {
 		return err
 	}
-	// Get the namespace the operator is currently deployed in.
-	operatorNs, err := k8sutil.GetOperatorNamespace()
-	if err != nil {
-		return err
-	}
-	// To generate metrics in other namespaces, add the values below.
-
 	/*
-	IBMDEV Workaround for https://github.com/operator-framework/operator-sdk/issues/1858
+		IBMDEV Workaround for https://github.com/operator-framework/operator-sdk/issues/1858
+		// Skip getting the namespace the operator is currently deployed in.
 	*/
-	operatorNs = ""
+	operatorNs := ""
 	ns := []string{operatorNs}
 
 	// Generate and serve custom resource specific metrics.

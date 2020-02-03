@@ -21,10 +21,11 @@ import (
 
 	// IBMDEV
 	"reflect"
-	appsv1 "k8s.io/api/apps/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
+
 	admissionv1beta1 "k8s.io/api/admissionregistration/v1beta1"
+	appsv1 "k8s.io/api/apps/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 
 	operatorv1alpha1 "github.ibm.com/IBMPrivateCloud/ibm-mt-grqenforcer-operator/pkg/apis/operator/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
@@ -55,26 +56,27 @@ This type and global variable provide the names for all the resources created/ma
 As such, it provides an overview of the required pieces for the enforcement component.
 Note however that the certSecret isn't currently used (secret name is provided by CR param instead).
 */
-type grqeNameSuffix struct{
-	certSecret string	/*currently unused, see commented out code blocks*/
-	grqeDeployment string
-	grqeService string
-	grqeWebhook string
-	bridgeDeployment string
-	bridgeService string
-	serviceAccount string
-	clusterRole string
+type grqeNameSuffix struct {
+	//certSecret       string	/*currently unused, see commented out code blocks*/
+	grqeDeployment     string
+	grqeService        string
+	grqeWebhook        string
+	bridgeDeployment   string
+	bridgeService      string
+	serviceAccount     string
+	clusterRole        string
 	clusterRoleBinding string
 }
+
 var suffix grqeNameSuffix = grqeNameSuffix{
-	certSecret: "-grqe-crt",	/*currently unused, see commented out code blocks*/
-	grqeDeployment: "-grqe-dep",
-	grqeService: "-grqe-svc",
-	grqeWebhook: ".mt-grqe.ibm",
-	bridgeDeployment: "-grqb-dep",
-	bridgeService: "-grqb-svc",
-	serviceAccount: "-grqe-svcacct",
-	clusterRole: "-grqe-crole",
+	//certSecret:       "-grqe-crt",	/*currently unused, see commented out code blocks*/
+	grqeDeployment:     "-grqe-dep",
+	grqeService:        "-grqe-svc",
+	grqeWebhook:        ".mt-grqe.ibm",
+	bridgeDeployment:   "-grqb-dep",
+	bridgeService:      "-grqb-svc",
+	serviceAccount:     "-grqe-svcacct",
+	clusterRole:        "-grqe-crole",
 	clusterRoleBinding: "-grqe-crbinding",
 }
 
@@ -168,342 +170,56 @@ func (r *ReconcileGroupResourceQuotaEnforcer) Reconcile(request reconcile.Reques
 		return reconcile.Result{}, err
 	}
 
+	var recResult reconcile.Result
+	var recErr error
 
-	// Define the expected deployment
-	expectedDeployment, err := r.deploymentForCR(cr)
-	if err != nil {
-		reqLogger.Error(err, "Failed to define expected resource")
-		return reconcile.Result{}, err
+	// Reconcile the expected deployment
+	recResult, recErr = r.deploymentForCR(cr)
+	if recErr != nil || recResult.Requeue {
+		return recResult, recErr
 	}
 
-	// If deployment does not exist, create it and requeue
-	foundDeployment := &appsv1.Deployment{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: expectedDeployment.Name, Namespace: cr.Spec.InstanceNamespace}, foundDeployment)
-	if err != nil && errors.IsNotFound(err) {
-		reqLogger.Info("Creating a new Deployment", "Deployment.Namespace", expectedDeployment.Namespace, "Deployment.Name", expectedDeployment.Name)
-		err = r.client.Create(context.TODO(), expectedDeployment)
-		if err != nil && errors.IsAlreadyExists(err) {
-			// Already exists from previous reconcile, requeue.
-			return reconcile.Result{Requeue: true}, nil
-		} else if err != nil {
-			reqLogger.Error(err, "Failed to create new Deployment", "Deployment.Namespace", expectedDeployment.Namespace, "Deployment.Name", expectedDeployment.Name)
-			return reconcile.Result{}, err
-		}
-		// Deployment created successfully - return and requeue
-		return reconcile.Result{Requeue: true}, nil
-	} else if err != nil {
-		reqLogger.Error(err, "Failed to get Deployment")
-		return reconcile.Result{}, err
-	} else if !reflect.DeepEqual(foundDeployment.Spec.Template.Spec.Volumes, expectedDeployment.Spec.Template.Spec.Volumes) ||
-		len(foundDeployment.Spec.Template.Spec.Containers) != len(expectedDeployment.Spec.Template.Spec.Containers) ||
-		!reflect.DeepEqual(foundDeployment.Spec.Template.Spec.Containers[0].Name, expectedDeployment.Spec.Template.Spec.Containers[0].Name) ||
-		!reflect.DeepEqual(foundDeployment.Spec.Template.Spec.Containers[0].Image, expectedDeployment.Spec.Template.Spec.Containers[0].Image) ||
-		!reflect.DeepEqual(foundDeployment.Spec.Template.Spec.Containers[0].Args, expectedDeployment.Spec.Template.Spec.Containers[0].Args) ||
-		!reflect.DeepEqual(foundDeployment.Spec.Template.Spec.Containers[0].Ports, expectedDeployment.Spec.Template.Spec.Containers[0].Ports) ||
-		!reflect.DeepEqual(foundDeployment.Spec.Template.Spec.Containers[0].VolumeMounts, expectedDeployment.Spec.Template.Spec.Containers[0].VolumeMounts){
-		// Spec is incorrect, update it and requeue
-		reqLogger.Info("Found deployment spec is incorrect", "Found", foundDeployment.Spec.Template.Spec, "Expected", expectedDeployment.Spec.Template.Spec)
-		foundDeployment.Spec.Template.Spec.Volumes = expectedDeployment.Spec.Template.Spec.Volumes
-		foundDeployment.Spec.Template.Spec.Containers = expectedDeployment.Spec.Template.Spec.Containers
-		err = r.client.Update(context.TODO(), foundDeployment)
-		if err != nil {
-			reqLogger.Error(err, "Failed to update Deployment", "Namespace", cr.Spec.InstanceNamespace, "Name", foundDeployment.Name)
-			return reconcile.Result{}, err
-		}
-		// Spec updated - return and requeue
-		return reconcile.Result{Requeue: true}, nil
+	// Reconcile the expected grq enforcer service
+	recResult, recErr = r.grqEnforcerServiceForCR(cr)
+	if recErr != nil || recResult.Requeue {
+		return recResult, recErr
 	}
 
-
-
-	// Define the expected grq enforcer service
-	expectedService, err := r.grqEnforcerServiceForCR(cr)
-	if err != nil {
-		reqLogger.Error(err, "Failed to define expected resource")
-		return reconcile.Result{}, err
+	// Reconcile the expected bridge deployment
+	recResult, recErr = r.bridgeDeploymentForCR(cr)
+	if recErr != nil || recResult.Requeue {
+		return recResult, recErr
 	}
 
-	// If service does not exist, create it and requeue
-	foundService := &corev1.Service{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: expectedService.Name, Namespace: cr.Spec.InstanceNamespace}, foundService)
-	if err != nil && errors.IsNotFound(err) {
-		reqLogger.Info("Creating a new Service", "Namespace", cr.Spec.InstanceNamespace, "Name", expectedService.Name)
-		err = r.client.Create(context.TODO(), expectedService)
-
-		if err != nil && errors.IsAlreadyExists(err) {
-			// Already exists from previous reconcile, requeue.
-			return reconcile.Result{Requeue: true}, nil
-		} else if err != nil {
-			reqLogger.Error(err, "Failed to create new Service", "Namespace", cr.Spec.InstanceNamespace, "Name", expectedService.Name)
-			return reconcile.Result{}, err
-		}
-		// Created successfully - return and requeue
-		return reconcile.Result{Requeue: true}, nil
-	} else if err != nil {
-		reqLogger.Error(err, "Failed to get Service")
-		return reconcile.Result{}, err
-	} else if !reflect.DeepEqual(foundService.Spec.Ports, expectedService.Spec.Ports) ||
-		!reflect.DeepEqual(foundService.Spec.Selector, expectedService.Spec.Selector) {
-		// Spec is incorrect, update it and requeue
-		reqLogger.Info("Found service spec is incorrect", "Found", foundService.Spec, "Expected", expectedService.Spec)
-		foundService.Spec.Ports = expectedService.Spec.Ports
-		foundService.Spec.Selector = expectedService.Spec.Selector
-		err = r.client.Update(context.TODO(), foundService)
-		if err != nil {
-			reqLogger.Error(err, "Failed to update Service", "Namespace", cr.Spec.InstanceNamespace, "Name", foundService.Name)
-			return reconcile.Result{}, err
-		}
-		// Spec updated - return and requeue
-		return reconcile.Result{Requeue: true}, nil
+	// Reconcile the expected bridge service
+	recResult, recErr = r.bridgeServiceForCR(cr)
+	if recErr != nil || recResult.Requeue {
+		return recResult, recErr
 	}
 
-
-
-
-
-
-	// Define the expected bridge deployment
-	expectedBridgeDep, err := r.bridgeDeploymentForCR(cr)
-	if err != nil {
-		reqLogger.Error(err, "Failed to define expected resource")
-		return reconcile.Result{}, err
+	// Reconcile the expected ServiceAccount
+	recResult, recErr = r.serviceAccountForCR(cr)
+	if recErr != nil || recResult.Requeue {
+		return recResult, recErr
 	}
 
-	// If deployment does not exist, create it and requeue
-	foundBridgeDep := &appsv1.Deployment{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: expectedBridgeDep.Name, Namespace: cr.Spec.InstanceNamespace}, foundBridgeDep)
-	if err != nil && errors.IsNotFound(err) {
-		reqLogger.Info("Creating a new Deployment", "Deployment.Namespace", expectedBridgeDep.Namespace, "Deployment.Name", expectedBridgeDep.Name)
-		err = r.client.Create(context.TODO(), expectedBridgeDep)
-		if err != nil && errors.IsAlreadyExists(err) {
-			// Already exists from previous reconcile, requeue.
-			return reconcile.Result{Requeue: true}, nil
-		} else if err != nil {
-			reqLogger.Error(err, "Failed to create new Deployment", "Deployment.Namespace", expectedBridgeDep.Namespace, "Deployment.Name", expectedBridgeDep.Name)
-			return reconcile.Result{}, err
-		}
-		// Deployment created successfully - return and requeue
-		return reconcile.Result{Requeue: true}, nil
-	} else if err != nil {
-		reqLogger.Error(err, "Failed to get Deployment")
-		return reconcile.Result{}, err
-	} else if !reflect.DeepEqual(foundBridgeDep.Spec.Template.Spec.Volumes, expectedBridgeDep.Spec.Template.Spec.Volumes) ||
-		len(foundBridgeDep.Spec.Template.Spec.Containers) != len(expectedBridgeDep.Spec.Template.Spec.Containers) ||
-		!reflect.DeepEqual(foundBridgeDep.Spec.Template.Spec.Containers[0].Name, expectedBridgeDep.Spec.Template.Spec.Containers[0].Name) ||
-		!reflect.DeepEqual(foundBridgeDep.Spec.Template.Spec.Containers[0].Image, expectedBridgeDep.Spec.Template.Spec.Containers[0].Image) ||
-		!reflect.DeepEqual(foundBridgeDep.Spec.Template.Spec.Containers[0].Args, expectedBridgeDep.Spec.Template.Spec.Containers[0].Args) ||
-		!reflect.DeepEqual(foundBridgeDep.Spec.Template.Spec.Containers[0].Ports, expectedBridgeDep.Spec.Template.Spec.Containers[0].Ports) ||
-		!reflect.DeepEqual(foundBridgeDep.Spec.Template.Spec.Containers[0].VolumeMounts, expectedBridgeDep.Spec.Template.Spec.Containers[0].VolumeMounts){
-		// Spec is incorrect, update it and requeue
-		reqLogger.Info("Found deployment spec is incorrect", "Found", foundBridgeDep.Spec.Template.Spec, "Expected", expectedBridgeDep.Spec.Template.Spec)
-		foundBridgeDep.Spec.Template.Spec.Volumes = expectedBridgeDep.Spec.Template.Spec.Volumes
-		foundBridgeDep.Spec.Template.Spec.Containers = expectedBridgeDep.Spec.Template.Spec.Containers
-		err = r.client.Update(context.TODO(), foundBridgeDep)
-		if err != nil {
-			reqLogger.Error(err, "Failed to update Deployment", "Namespace", cr.Spec.InstanceNamespace, "Name", foundBridgeDep.Name)
-			return reconcile.Result{}, err
-		}
-		// Spec updated - return and requeue
-		return reconcile.Result{Requeue: true}, nil
+	// Reconcile the expected Role
+	recResult, recErr = r.roleForCR(cr)
+	if recErr != nil || recResult.Requeue {
+		return recResult, recErr
 	}
 
-
-
-	// Define the expected bridge service
-	expectedBridgeSvc, err := r.bridgeServiceForCR(cr)
-	if err != nil {
-		reqLogger.Error(err, "Failed to define expected resource")
-		return reconcile.Result{}, err
+	// Reconcile the expected RoleBinding
+	recResult, recErr = r.roleBindingForCR(cr)
+	if recErr != nil || recResult.Requeue {
+		return recResult, recErr
 	}
 
-	// If service does not exist, create it and requeue
-	foundBridgeSvc := &corev1.Service{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: expectedBridgeSvc.Name, Namespace: cr.Spec.InstanceNamespace}, foundBridgeSvc)
-	if err != nil && errors.IsNotFound(err) {
-		reqLogger.Info("Creating a new Service", "Namespace", cr.Spec.InstanceNamespace, "Name", expectedBridgeSvc.Name)
-		err = r.client.Create(context.TODO(), expectedBridgeSvc)
-		if err != nil && errors.IsAlreadyExists(err) {
-			// Already exists from previous reconcile, requeue.
-			return reconcile.Result{Requeue: true}, nil
-		} else if err != nil {
-			reqLogger.Error(err, "Failed to create new Service", "Namespace", cr.Spec.InstanceNamespace, "Name", expectedBridgeSvc.Name)
-			return reconcile.Result{}, err
-		}
-		// Created successfully - return and requeue
-		return reconcile.Result{Requeue: true}, nil
-	} else if err != nil {
-		reqLogger.Error(err, "Failed to get Service")
-		return reconcile.Result{}, err
-	} else if !reflect.DeepEqual(foundBridgeSvc.Spec.Ports, expectedBridgeSvc.Spec.Ports) ||
-		!reflect.DeepEqual(foundBridgeSvc.Spec.Selector, expectedBridgeSvc.Spec.Selector) {
-		// Spec is incorrect, update it and requeue
-		reqLogger.Info("Found service spec is incorrect", "Found", foundBridgeSvc.Spec, "Expected", expectedBridgeSvc.Spec)
-		foundBridgeSvc.Spec.Ports = expectedBridgeSvc.Spec.Ports
-		foundBridgeSvc.Spec.Selector = expectedBridgeSvc.Spec.Selector
-		err = r.client.Update(context.TODO(), foundBridgeSvc)
-		if err != nil {
-			reqLogger.Error(err, "Failed to update Service", "Namespace", cr.Spec.InstanceNamespace, "Name", foundBridgeSvc.Name)
-			return reconcile.Result{}, err
-		}
-		// Spec updated - return and requeue
-		return reconcile.Result{Requeue: true}, nil
+	// Reconcile the expected MutatingWebhookConfig
+	recResult, recErr = r.webhookConfigForCR(cr)
+	if recErr != nil || recResult.Requeue {
+		return recResult, recErr
 	}
-
-
-
-	// Define the expected ServiceAccount
-	expectedSvcAcct, err := r.serviceAccountForCR(cr)
-	if err != nil {
-		reqLogger.Error(err, "Failed to define expected resource")
-		return reconcile.Result{}, err
-	}
-
-	// If ServiceAccount does not exist, create it and requeue
-	foundSvcAcct := &corev1.ServiceAccount{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: expectedSvcAcct.Name, Namespace: cr.Spec.InstanceNamespace}, foundSvcAcct)
-	if err != nil && errors.IsNotFound(err) {
-		reqLogger.Info("Creating a new ServiceAccount", "Namespace", cr.Spec.InstanceNamespace, "Name", expectedSvcAcct.Name)
-		err = r.client.Create(context.TODO(), expectedSvcAcct)
-		if err != nil && errors.IsAlreadyExists(err) {
-			// Already exists from previous reconcile, requeue.
-			return reconcile.Result{Requeue: true}, nil
-		} else if err != nil {
-			reqLogger.Error(err, "Failed to create new ServiceAccount", "Namespace", cr.Spec.InstanceNamespace, "Name", expectedSvcAcct.Name)
-			return reconcile.Result{}, err
-		}
-		// Created successfully - return and requeue
-		return reconcile.Result{Requeue: true}, nil
-	} else if err != nil {
-		reqLogger.Error(err, "Failed to get ServiceAccount")
-		return reconcile.Result{}, err
-	}
-	// No extra validation of the service account required
-
-
-
-	// Define the expected Role
-	expectedRole, err := r.roleForCR(cr)
-	if err != nil {
-		reqLogger.Error(err, "Failed to define expected resource")
-		return reconcile.Result{}, err
-	}
-
-	// If Role does not exist, create it and requeue
-	foundRole := &rbacv1.ClusterRole{}
-	// Note: clusterroles are cluster-scoped, so this does not search using namespace (unlike other resources above)
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: expectedRole.Name}, foundRole)
-	if err != nil && errors.IsNotFound(err) {
-		reqLogger.Info("Creating a new "+reflect.TypeOf(expectedRole).String(), "Name", expectedRole.Name)
-		err = r.client.Create(context.TODO(), expectedRole)
-		if err != nil && errors.IsAlreadyExists(err) {
-			// Already exists from previous reconcile, requeue.
-			return reconcile.Result{Requeue: true}, nil
-		} else if err != nil {
-			reqLogger.Error(err, "Failed to create new "+reflect.TypeOf(expectedRole).String(), "Name", expectedRole.Name)
-			return reconcile.Result{}, err
-		}
-		// Created successfully - return and requeue
-		return reconcile.Result{Requeue: true}, nil
-	} else if err != nil {
-		reqLogger.Error(err, "Failed to get "+reflect.TypeOf(expectedRole).String())
-		return reconcile.Result{}, err
-	} else if !reflect.DeepEqual(foundRole.Rules, expectedRole.Rules) {
-		// Spec is incorrect, update it and requeue
-		reqLogger.Info("Found role is incorrect", "Found", foundRole.Rules, "Expected", expectedRole.Rules)
-		foundRole.Rules = expectedRole.Rules
-		err = r.client.Update(context.TODO(), foundRole)
-		if err != nil {
-			reqLogger.Error(err, "Failed to update role", "Name", foundRole.Name)
-			return reconcile.Result{}, err
-		}
-		// Updated - return and requeue
-		return reconcile.Result{Requeue: true}, nil
-	}
-
-
-
-	// Define the expected RoleBinding
-	expectedRoleBinding, err := r.roleBindingForCR(cr)
-	if err != nil {
-		reqLogger.Error(err, "Failed to define expected resource")
-		return reconcile.Result{}, err
-	}
-
-	// If RoleBinding does not exist, create it and requeue
-	foundRoleBinding := &rbacv1.ClusterRoleBinding{}
-	// Note: clusterrolebindings are cluster-scoped, so this does not search using namespace (unlike other resources above)
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: expectedRoleBinding.Name}, foundRoleBinding)
-	if err != nil && errors.IsNotFound(err) {
-		reqLogger.Info("Creating a new "+reflect.TypeOf(expectedRoleBinding).String(), "Name", expectedRoleBinding.Name)
-		err = r.client.Create(context.TODO(), expectedRoleBinding)
-		if err != nil && errors.IsAlreadyExists(err) {
-			// Already exists from previous reconcile, requeue.
-			return reconcile.Result{Requeue: true}, nil
-		} else if err != nil {
-			reqLogger.Error(err, "Failed to create new "+reflect.TypeOf(expectedRoleBinding).String(), "Name", expectedRoleBinding.Name)
-			return reconcile.Result{}, err
-		}
-		// Created successfully - return and requeue
-		return reconcile.Result{Requeue: true}, nil
-	} else if err != nil {
-		reqLogger.Error(err, "Failed to get "+reflect.TypeOf(expectedRoleBinding).String())
-		return reconcile.Result{}, err
-	} else if !reflect.DeepEqual(foundRoleBinding.Subjects, expectedRoleBinding.Subjects) ||
-		!reflect.DeepEqual(foundRoleBinding.RoleRef, expectedRoleBinding.RoleRef) {
-		// Spec is incorrect, update it and requeue
-		reqLogger.Info("Found rolebinding is incorrect", "Found", foundRoleBinding, "Expected", expectedRoleBinding)
-		err = r.client.Delete(context.TODO(), foundRoleBinding)
-		if err != nil {
-			reqLogger.Error(err, "Failed to delete rolebinding", "Name", foundRoleBinding.Name)
-			return reconcile.Result{}, err
-		}
-		// Deleted - return and requeue
-		return reconcile.Result{Requeue: true}, nil
-	}
-
-
-	// Define the expected MutatingWebhookConfig
-	expectedWebhookConfig, err := r.webhookConfigForCR(cr)
-	if err != nil {
-		reqLogger.Error(err, "Failed to define expected resource")
-		return reconcile.Result{}, err
-	}
-
-	// If MutatingWebhookConfig does not exist, create it and requeue
-	foundWebhookConfig := &admissionv1beta1.MutatingWebhookConfiguration{}
-	// Note: mutatingwebhookconfigurations are cluster-scoped, so this does not search using namespace (unlike other resources above)
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: expectedWebhookConfig.Name}, foundWebhookConfig)
-	if err != nil && errors.IsNotFound(err) {
-		reqLogger.Info("Creating a new MutatingWebhookConfig", "Namespace", cr.Spec.InstanceNamespace, "Name", expectedWebhookConfig.Name)
-		err = r.client.Create(context.TODO(), expectedWebhookConfig)
-		if err != nil && errors.IsAlreadyExists(err) {
-			// Already exists from previous reconcile, requeue.
-			return reconcile.Result{Requeue: true}, nil
-		} else if err != nil {
-			reqLogger.Error(err, "Failed to create new MutatingWebhookConfig", "Namespace", cr.Spec.InstanceNamespace, "Name", expectedWebhookConfig.Name)
-			return reconcile.Result{}, err
-		}
-		// Created successfully - return and requeue
-		return reconcile.Result{Requeue: true}, nil
-	} else if err != nil {
-		reqLogger.Error(err, "Failed to get MutatingWebhookConfig")
-		return reconcile.Result{}, err
-	} else if len(foundWebhookConfig.Webhooks) != len(expectedWebhookConfig.Webhooks) ||
-		!reflect.DeepEqual(foundWebhookConfig.Webhooks[0].ClientConfig, expectedWebhookConfig.Webhooks[0].ClientConfig) ||
-		!reflect.DeepEqual(foundWebhookConfig.Webhooks[0].Rules, expectedWebhookConfig.Webhooks[0].Rules) {
-		// Spec is incorrect, update it and requeue
-		reqLogger.Info("Found MutatingWebhookConfig is incorrect", "Found", foundWebhookConfig.Webhooks, "Expected", expectedWebhookConfig.Webhooks)
-		foundWebhookConfig.Webhooks = expectedWebhookConfig.Webhooks
-		err = r.client.Update(context.TODO(), foundWebhookConfig)
-		if err != nil {
-			reqLogger.Error(err, "Failed to update MutatingWebhookConfig", "Name", foundWebhookConfig.Name)
-			return reconcile.Result{}, err
-		}
-		// Deleted - return and requeue
-		return reconcile.Result{Requeue: true}, nil
-	}
-
-
 
 	// If necessary, update the CR status with the pod names
 	podList := &corev1.PodList{}
@@ -542,7 +258,6 @@ func (r *ReconcileGroupResourceQuotaEnforcer) Reconcile(request reconcile.Reques
 		}
 	}
 
-
 	reqLogger.Info("Reconciliation successful!", "Name", cr.Name)
 	return reconcile.Result{}, nil
 }
@@ -551,13 +266,16 @@ func (r *ReconcileGroupResourceQuotaEnforcer) Reconcile(request reconcile.Reques
 func labelsForDeployment(crName string) map[string]string {
 	return map[string]string{"app": "groupresourcequotaenforcer", "groupresourcequotaenforcer_cr": crName}
 }
+
 //IBMDEV
 func labelsForBridgeDeployment(crName string) map[string]string {
 	return map[string]string{"app": "iam-bridge", "groupresourcequotaenforcer_cr": crName}
 }
 
-// IBMDEV deploymentForCR returns a GRQ enforcer deployment object
-func (r *ReconcileGroupResourceQuotaEnforcer) deploymentForCR(cr *operatorv1alpha1.GroupResourceQuotaEnforcer) (*appsv1.Deployment, error) {
+// IBMDEV deploymentForCR returns (reconcile.Result, error)
+func (r *ReconcileGroupResourceQuotaEnforcer) deploymentForCR(cr *operatorv1alpha1.GroupResourceQuotaEnforcer) (reconcile.Result, error) {
+	reqLogger := log.WithValues("cr.Name", cr.Name)
+
 	ls := labelsForDeployment(cr.Name)
 
 	int32_1 := int32(1)
@@ -573,9 +291,9 @@ func (r *ReconcileGroupResourceQuotaEnforcer) deploymentForCR(cr *operatorv1alph
 		)
 	}
 
-	retVal := &appsv1.Deployment{
+	expectedRes := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: cr.Name + suffix.grqeDeployment,
+			Name:      cr.Name + suffix.grqeDeployment,
 			Namespace: cr.Spec.InstanceNamespace,
 		},
 		Spec: appsv1.DeploymentSpec{
@@ -590,8 +308,8 @@ func (r *ReconcileGroupResourceQuotaEnforcer) deploymentForCR(cr *operatorv1alph
 				Spec: corev1.PodSpec{
 					ServiceAccountName: cr.Name + suffix.serviceAccount,
 					Containers: []corev1.Container{{
-						Image: cr.Spec.ImageRegistry+"/ibm-mt-groupresourcequota:2.0.0",
-						Name: "ibm-mt-grq-enforcer",
+						Image:           cr.Spec.ImageRegistry + "/ibm-mt-groupresourcequota:2.0.0",
+						Name:            "ibm-mt-grq-enforcer",
 						ImagePullPolicy: "IfNotPresent",
 						Args: []string{
 							"-port=443",
@@ -603,12 +321,12 @@ func (r *ReconcileGroupResourceQuotaEnforcer) deploymentForCR(cr *operatorv1alph
 						},
 						Ports: []corev1.ContainerPort{{
 							ContainerPort: 443,
-							Protocol: "TCP",
+							Protocol:      "TCP",
 						}},
 						VolumeMounts: []corev1.VolumeMount{{
-							Name: "webhook-certs",
+							Name:      "webhook-certs",
 							MountPath: "/etc/webhook/certs",
-							ReadOnly: true,
+							ReadOnly:  true,
 						}},
 						//LivenessProbe: TBD,
 						//ReadinessProbe: TBD,
@@ -619,7 +337,7 @@ func (r *ReconcileGroupResourceQuotaEnforcer) deploymentForCR(cr *operatorv1alph
 						VolumeSource: corev1.VolumeSource{
 							Secret: &corev1.SecretVolumeSource{
 								//SecretName: cr.Name + suffix.certSecret,
-								SecretName: cr.Spec.CertSecret,
+								SecretName:  cr.Spec.CertSecret,
 								DefaultMode: &int32_420,
 							},
 						},
@@ -629,12 +347,58 @@ func (r *ReconcileGroupResourceQuotaEnforcer) deploymentForCR(cr *operatorv1alph
 		},
 	}
 	// Set CR instance as the owner and controller
-	err := controllerutil.SetControllerReference(cr, retVal, r.scheme)
-	return retVal, err
+	err := controllerutil.SetControllerReference(cr, expectedRes, r.scheme)
+	if err != nil {
+		reqLogger.Error(err, "Failed to define expected resource")
+		return reconcile.Result{}, err
+	}
+
+	// If deployment does not exist, create it and requeue
+	foundDeployment := &appsv1.Deployment{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: expectedRes.Name, Namespace: cr.Spec.InstanceNamespace}, foundDeployment)
+	if err != nil && errors.IsNotFound(err) {
+		reqLogger.Info("Creating a new Deployment", "Deployment.Namespace", expectedRes.Namespace, "Deployment.Name", expectedRes.Name)
+		err = r.client.Create(context.TODO(), expectedRes)
+		if err != nil && errors.IsAlreadyExists(err) {
+			// Already exists from previous reconcile, requeue.
+			return reconcile.Result{Requeue: true}, nil
+		} else if err != nil {
+			reqLogger.Error(err, "Failed to create new Deployment", "Deployment.Namespace", expectedRes.Namespace, "Deployment.Name", expectedRes.Name)
+			return reconcile.Result{}, err
+		}
+		// Deployment created successfully - return and requeue
+		return reconcile.Result{Requeue: true}, nil
+	} else if err != nil {
+		reqLogger.Error(err, "Failed to get Deployment")
+		return reconcile.Result{}, err
+	} else if !reflect.DeepEqual(foundDeployment.Spec.Template.Spec.Volumes, expectedRes.Spec.Template.Spec.Volumes) ||
+		len(foundDeployment.Spec.Template.Spec.Containers) != len(expectedRes.Spec.Template.Spec.Containers) ||
+		!reflect.DeepEqual(foundDeployment.Spec.Template.Spec.Containers[0].Name, expectedRes.Spec.Template.Spec.Containers[0].Name) ||
+		!reflect.DeepEqual(foundDeployment.Spec.Template.Spec.Containers[0].Image, expectedRes.Spec.Template.Spec.Containers[0].Image) ||
+		!reflect.DeepEqual(foundDeployment.Spec.Template.Spec.Containers[0].Args, expectedRes.Spec.Template.Spec.Containers[0].Args) ||
+		!reflect.DeepEqual(foundDeployment.Spec.Template.Spec.Containers[0].Ports, expectedRes.Spec.Template.Spec.Containers[0].Ports) ||
+		!reflect.DeepEqual(foundDeployment.Spec.Template.Spec.Containers[0].VolumeMounts, expectedRes.Spec.Template.Spec.Containers[0].VolumeMounts) {
+		// Spec is incorrect, update it and requeue
+		reqLogger.Info("Found deployment spec is incorrect", "Found", foundDeployment.Spec.Template.Spec, "Expected", expectedRes.Spec.Template.Spec)
+		foundDeployment.Spec.Template.Spec.Volumes = expectedRes.Spec.Template.Spec.Volumes
+		foundDeployment.Spec.Template.Spec.Containers = expectedRes.Spec.Template.Spec.Containers
+		err = r.client.Update(context.TODO(), foundDeployment)
+		if err != nil {
+			reqLogger.Error(err, "Failed to update Deployment", "Namespace", cr.Spec.InstanceNamespace, "Name", foundDeployment.Name)
+			return reconcile.Result{}, err
+		}
+		// Spec updated - return and requeue
+		return reconcile.Result{Requeue: true}, nil
+	}
+
+	// No reconcile was necessary
+	return reconcile.Result{}, nil
 }
 
-// IBMDEV bridgeDeploymentForCR returns a GRQ enforcer deployment object
-func (r *ReconcileGroupResourceQuotaEnforcer) bridgeDeploymentForCR(cr *operatorv1alpha1.GroupResourceQuotaEnforcer) (*appsv1.Deployment, error) {
+// IBMDEV bridgeDeploymentForCR returns (reconcile.Result, error)
+func (r *ReconcileGroupResourceQuotaEnforcer) bridgeDeploymentForCR(cr *operatorv1alpha1.GroupResourceQuotaEnforcer) (reconcile.Result, error) {
+	reqLogger := log.WithValues("cr.Name", cr.Name)
+
 	ls := labelsForBridgeDeployment(cr.Name)
 
 	int32_1 := int32(1)
@@ -650,9 +414,9 @@ func (r *ReconcileGroupResourceQuotaEnforcer) bridgeDeploymentForCR(cr *operator
 		)
 	}
 
-	retVal := &appsv1.Deployment{
+	expectedRes := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: cr.Name + suffix.bridgeDeployment,
+			Name:      cr.Name + suffix.bridgeDeployment,
 			Namespace: cr.Spec.InstanceNamespace,
 		},
 		Spec: appsv1.DeploymentSpec{
@@ -667,8 +431,8 @@ func (r *ReconcileGroupResourceQuotaEnforcer) bridgeDeploymentForCR(cr *operator
 				Spec: corev1.PodSpec{
 					ServiceAccountName: cr.Name + suffix.serviceAccount,
 					Containers: []corev1.Container{{
-						Image: cr.Spec.ImageRegistry+"/ibm-mt-iam-bridge:2.0.0",
-						Name: "ibm-mt-iam-bridge",
+						Image:           cr.Spec.ImageRegistry + "/ibm-mt-iam-bridge:2.0.0",
+						Name:            "ibm-mt-iam-bridge",
 						ImagePullPolicy: "IfNotPresent",
 						Args: []string{
 							"-port=443",
@@ -680,12 +444,12 @@ func (r *ReconcileGroupResourceQuotaEnforcer) bridgeDeploymentForCR(cr *operator
 						},
 						Ports: []corev1.ContainerPort{{
 							ContainerPort: 443,
-							Protocol: "TCP",
+							Protocol:      "TCP",
 						}},
 						VolumeMounts: []corev1.VolumeMount{{
-							Name: "webhook-certs",
+							Name:      "webhook-certs",
 							MountPath: "/etc/webhook/certs",
-							ReadOnly: true,
+							ReadOnly:  true,
 						}},
 						//LivenessProbe: TBD,
 						//ReadinessProbe: TBD,
@@ -696,7 +460,7 @@ func (r *ReconcileGroupResourceQuotaEnforcer) bridgeDeploymentForCR(cr *operator
 						VolumeSource: corev1.VolumeSource{
 							Secret: &corev1.SecretVolumeSource{
 								//SecretName: cr.Name + suffix.certSecret,
-								SecretName: cr.Spec.CertSecret,
+								SecretName:  cr.Spec.CertSecret,
 								DefaultMode: &int32_420,
 							},
 						},
@@ -706,126 +470,361 @@ func (r *ReconcileGroupResourceQuotaEnforcer) bridgeDeploymentForCR(cr *operator
 		},
 	}
 	// Set CR instance as the owner and controller
-	err := controllerutil.SetControllerReference(cr, retVal, r.scheme)
-	return retVal, err
+	err := controllerutil.SetControllerReference(cr, expectedRes, r.scheme)
+	if err != nil {
+		reqLogger.Error(err, "Failed to define expected resource")
+		return reconcile.Result{}, err
+	}
+
+	// If deployment does not exist, create it and requeue
+	foundBridgeDep := &appsv1.Deployment{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: expectedRes.Name, Namespace: cr.Spec.InstanceNamespace}, foundBridgeDep)
+	if err != nil && errors.IsNotFound(err) {
+		reqLogger.Info("Creating a new Deployment", "Deployment.Namespace", expectedRes.Namespace, "Deployment.Name", expectedRes.Name)
+		err = r.client.Create(context.TODO(), expectedRes)
+		if err != nil && errors.IsAlreadyExists(err) {
+			// Already exists from previous reconcile, requeue.
+			return reconcile.Result{Requeue: true}, nil
+		} else if err != nil {
+			reqLogger.Error(err, "Failed to create new Deployment", "Deployment.Namespace", expectedRes.Namespace, "Deployment.Name", expectedRes.Name)
+			return reconcile.Result{}, err
+		}
+		// Deployment created successfully - return and requeue
+		return reconcile.Result{Requeue: true}, nil
+	} else if err != nil {
+		reqLogger.Error(err, "Failed to get Deployment")
+		return reconcile.Result{}, err
+	} else if !reflect.DeepEqual(foundBridgeDep.Spec.Template.Spec.Volumes, expectedRes.Spec.Template.Spec.Volumes) ||
+		len(foundBridgeDep.Spec.Template.Spec.Containers) != len(expectedRes.Spec.Template.Spec.Containers) ||
+		!reflect.DeepEqual(foundBridgeDep.Spec.Template.Spec.Containers[0].Name, expectedRes.Spec.Template.Spec.Containers[0].Name) ||
+		!reflect.DeepEqual(foundBridgeDep.Spec.Template.Spec.Containers[0].Image, expectedRes.Spec.Template.Spec.Containers[0].Image) ||
+		!reflect.DeepEqual(foundBridgeDep.Spec.Template.Spec.Containers[0].Args, expectedRes.Spec.Template.Spec.Containers[0].Args) ||
+		!reflect.DeepEqual(foundBridgeDep.Spec.Template.Spec.Containers[0].Ports, expectedRes.Spec.Template.Spec.Containers[0].Ports) ||
+		!reflect.DeepEqual(foundBridgeDep.Spec.Template.Spec.Containers[0].VolumeMounts, expectedRes.Spec.Template.Spec.Containers[0].VolumeMounts) {
+		// Spec is incorrect, update it and requeue
+		reqLogger.Info("Found deployment spec is incorrect", "Found", foundBridgeDep.Spec.Template.Spec, "Expected", expectedRes.Spec.Template.Spec)
+		foundBridgeDep.Spec.Template.Spec.Volumes = expectedRes.Spec.Template.Spec.Volumes
+		foundBridgeDep.Spec.Template.Spec.Containers = expectedRes.Spec.Template.Spec.Containers
+		err = r.client.Update(context.TODO(), foundBridgeDep)
+		if err != nil {
+			reqLogger.Error(err, "Failed to update Deployment", "Namespace", cr.Spec.InstanceNamespace, "Name", foundBridgeDep.Name)
+			return reconcile.Result{}, err
+		}
+		// Spec updated - return and requeue
+		return reconcile.Result{Requeue: true}, nil
+	}
+
+	// No reconcile was necessary
+	return reconcile.Result{}, nil
 }
 
-// IBMDEV grqEnforcerServiceForCR returns a service for the GRQ enforcer deployment
-func (r *ReconcileGroupResourceQuotaEnforcer) grqEnforcerServiceForCR(cr *operatorv1alpha1.GroupResourceQuotaEnforcer) (*corev1.Service, error) {
+// IBMDEV grqEnforcerServiceForCR returns (reconcile.Result, error)
+func (r *ReconcileGroupResourceQuotaEnforcer) grqEnforcerServiceForCR(cr *operatorv1alpha1.GroupResourceQuotaEnforcer) (reconcile.Result, error) {
+	reqLogger := log.WithValues("cr.Name", cr.Name)
+
 	ls := labelsForDeployment(cr.Name)
 
-	retVal := &corev1.Service{
+	expectedRes := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: cr.Name + suffix.grqeService,
+			Name:      cr.Name + suffix.grqeService,
 			Namespace: cr.Spec.InstanceNamespace,
 		},
 		Spec: corev1.ServiceSpec{
 			Selector: ls,
 			Ports: []corev1.ServicePort{{
-				Port: 443,
+				Port:       443,
 				TargetPort: intstr.FromInt(443),
-				Protocol: corev1.ProtocolTCP,
+				Protocol:   corev1.ProtocolTCP,
 			}},
 		},
 	}
 	// Set CR instance as the owner and controller
-	err := controllerutil.SetControllerReference(cr, retVal, r.scheme)
-	return retVal, err
+	err := controllerutil.SetControllerReference(cr, expectedRes, r.scheme)
+	if err != nil {
+		reqLogger.Error(err, "Failed to define expected resource")
+		return reconcile.Result{}, err
+	}
+
+	// If service does not exist, create it and requeue
+	foundService := &corev1.Service{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: expectedRes.Name, Namespace: cr.Spec.InstanceNamespace}, foundService)
+	if err != nil && errors.IsNotFound(err) {
+		reqLogger.Info("Creating a new Service", "Namespace", cr.Spec.InstanceNamespace, "Name", expectedRes.Name)
+		err = r.client.Create(context.TODO(), expectedRes)
+
+		if err != nil && errors.IsAlreadyExists(err) {
+			// Already exists from previous reconcile, requeue.
+			return reconcile.Result{Requeue: true}, nil
+		} else if err != nil {
+			reqLogger.Error(err, "Failed to create new Service", "Namespace", cr.Spec.InstanceNamespace, "Name", expectedRes.Name)
+			return reconcile.Result{}, err
+		}
+		// Created successfully - return and requeue
+		return reconcile.Result{Requeue: true}, nil
+	} else if err != nil {
+		reqLogger.Error(err, "Failed to get Service")
+		return reconcile.Result{}, err
+	} else if !reflect.DeepEqual(foundService.Spec.Ports, expectedRes.Spec.Ports) ||
+		!reflect.DeepEqual(foundService.Spec.Selector, expectedRes.Spec.Selector) {
+		// Spec is incorrect, update it and requeue
+		reqLogger.Info("Found service spec is incorrect", "Found", foundService.Spec, "Expected", expectedRes.Spec)
+		foundService.Spec.Ports = expectedRes.Spec.Ports
+		foundService.Spec.Selector = expectedRes.Spec.Selector
+		err = r.client.Update(context.TODO(), foundService)
+		if err != nil {
+			reqLogger.Error(err, "Failed to update Service", "Namespace", cr.Spec.InstanceNamespace, "Name", foundService.Name)
+			return reconcile.Result{}, err
+		}
+		// Spec updated - return and requeue
+		return reconcile.Result{Requeue: true}, nil
+	}
+
+	// No reconcile was necessary
+	return reconcile.Result{}, nil
 }
 
-// IBMDEV bridgeServiceForCR returns a service for the bridge deployment
-func (r *ReconcileGroupResourceQuotaEnforcer) bridgeServiceForCR(cr *operatorv1alpha1.GroupResourceQuotaEnforcer) (*corev1.Service, error) {
+// IBMDEV bridgeServiceForCR returns (reconcile.Result, error)
+func (r *ReconcileGroupResourceQuotaEnforcer) bridgeServiceForCR(cr *operatorv1alpha1.GroupResourceQuotaEnforcer) (reconcile.Result, error) {
+	reqLogger := log.WithValues("cr.Name", cr.Name)
+
 	ls := labelsForBridgeDeployment(cr.Name)
 
-	retVal := &corev1.Service{
+	expectedRes := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: cr.Name + suffix.bridgeService,
+			Name:      cr.Name + suffix.bridgeService,
 			Namespace: cr.Spec.InstanceNamespace,
 		},
 		Spec: corev1.ServiceSpec{
 			Selector: ls,
 			Ports: []corev1.ServicePort{{
-				Port: 443,
+				Port:       443,
 				TargetPort: intstr.FromInt(443),
-				Protocol: corev1.ProtocolTCP,
+				Protocol:   corev1.ProtocolTCP,
 			}},
 		},
 	}
 	// Set CR instance as the owner and controller
-	err := controllerutil.SetControllerReference(cr, retVal, r.scheme)
-	return retVal, err
+	err := controllerutil.SetControllerReference(cr, expectedRes, r.scheme)
+	if err != nil {
+		reqLogger.Error(err, "Failed to define expected resource")
+		return reconcile.Result{}, err
+	}
+
+	// If service does not exist, create it and requeue
+	foundService := &corev1.Service{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: expectedRes.Name, Namespace: cr.Spec.InstanceNamespace}, foundService)
+	if err != nil && errors.IsNotFound(err) {
+		reqLogger.Info("Creating a new Service", "Namespace", cr.Spec.InstanceNamespace, "Name", expectedRes.Name)
+		err = r.client.Create(context.TODO(), expectedRes)
+
+		if err != nil && errors.IsAlreadyExists(err) {
+			// Already exists from previous reconcile, requeue.
+			return reconcile.Result{Requeue: true}, nil
+		} else if err != nil {
+			reqLogger.Error(err, "Failed to create new Service", "Namespace", cr.Spec.InstanceNamespace, "Name", expectedRes.Name)
+			return reconcile.Result{}, err
+		}
+		// Created successfully - return and requeue
+		return reconcile.Result{Requeue: true}, nil
+	} else if err != nil {
+		reqLogger.Error(err, "Failed to get Service")
+		return reconcile.Result{}, err
+	} else if !reflect.DeepEqual(foundService.Spec.Ports, expectedRes.Spec.Ports) ||
+		!reflect.DeepEqual(foundService.Spec.Selector, expectedRes.Spec.Selector) {
+		// Spec is incorrect, update it and requeue
+		reqLogger.Info("Found service spec is incorrect", "Found", foundService.Spec, "Expected", expectedRes.Spec)
+		foundService.Spec.Ports = expectedRes.Spec.Ports
+		foundService.Spec.Selector = expectedRes.Spec.Selector
+		err = r.client.Update(context.TODO(), foundService)
+		if err != nil {
+			reqLogger.Error(err, "Failed to update Service", "Namespace", cr.Spec.InstanceNamespace, "Name", foundService.Name)
+			return reconcile.Result{}, err
+		}
+		// Spec updated - return and requeue
+		return reconcile.Result{Requeue: true}, nil
+	}
+
+	// No reconcile was necessary
+	return reconcile.Result{}, nil
 }
 
-// IBMDEV serviceAccountForCR returns a ServiceAccount for the GRQ enforcer deployment
-func (r *ReconcileGroupResourceQuotaEnforcer) serviceAccountForCR(cr *operatorv1alpha1.GroupResourceQuotaEnforcer) (*corev1.ServiceAccount, error) {
-	retVal := &corev1.ServiceAccount{
+// IBMDEV serviceAccountForCR returns (reconcile.Result, error)
+func (r *ReconcileGroupResourceQuotaEnforcer) serviceAccountForCR(cr *operatorv1alpha1.GroupResourceQuotaEnforcer) (reconcile.Result, error) {
+	reqLogger := log.WithValues("cr.Name", cr.Name)
+
+	expectedRes := &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: cr.Name + suffix.serviceAccount,
+			Name:      cr.Name + suffix.serviceAccount,
 			Namespace: cr.Spec.InstanceNamespace,
 		},
 	}
 	// Set CR instance as the owner and controller
-	err := controllerutil.SetControllerReference(cr, retVal, r.scheme)
-	return retVal, err
+	err := controllerutil.SetControllerReference(cr, expectedRes, r.scheme)
+	if err != nil {
+		reqLogger.Error(err, "Failed to define expected resource")
+		return reconcile.Result{}, err
+	}
+
+	// If ServiceAccount does not exist, create it and requeue
+	foundSvcAcct := &corev1.ServiceAccount{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: expectedRes.Name, Namespace: cr.Spec.InstanceNamespace}, foundSvcAcct)
+	if err != nil && errors.IsNotFound(err) {
+		reqLogger.Info("Creating a new ServiceAccount", "Namespace", cr.Spec.InstanceNamespace, "Name", expectedRes.Name)
+		err = r.client.Create(context.TODO(), expectedRes)
+		if err != nil && errors.IsAlreadyExists(err) {
+			// Already exists from previous reconcile, requeue.
+			return reconcile.Result{Requeue: true}, nil
+		} else if err != nil {
+			reqLogger.Error(err, "Failed to create new ServiceAccount", "Namespace", cr.Spec.InstanceNamespace, "Name", expectedRes.Name)
+			return reconcile.Result{}, err
+		}
+		// Created successfully - return and requeue
+		return reconcile.Result{Requeue: true}, nil
+	} else if err != nil {
+		reqLogger.Error(err, "Failed to get ServiceAccount")
+		return reconcile.Result{}, err
+	}
+	// No extra validation of the service account required
+
+	// No reconcile was necessary
+	return reconcile.Result{}, nil
 }
 
-// IBMDEV roleForCR returns a ClusterRole for the GRQ enforcer deployment
-func (r *ReconcileGroupResourceQuotaEnforcer) roleForCR(cr *operatorv1alpha1.GroupResourceQuotaEnforcer) (*rbacv1.ClusterRole, error) {
-	retVal := &rbacv1.ClusterRole{
+// IBMDEV roleForCR returns (reconcile.Result, error)
+func (r *ReconcileGroupResourceQuotaEnforcer) roleForCR(cr *operatorv1alpha1.GroupResourceQuotaEnforcer) (reconcile.Result, error) {
+	reqLogger := log.WithValues("cr.Name", cr.Name)
+
+	expectedRes := &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: cr.Name + suffix.clusterRole,
 		},
 		Rules: []rbacv1.PolicyRule{{
-			Verbs: []string{"get", "watch", "list", "create", "update"},
+			Verbs:     []string{"get", "watch", "list", "create", "update"},
 			APIGroups: []string{""},
 			Resources: []string{"resourcequotas", "namespaces", "groupresourcequotas"},
 		}},
 	}
 	// Set CR instance as the owner and controller
-	err := controllerutil.SetControllerReference(cr, retVal, r.scheme)
-	return retVal, err
+	err := controllerutil.SetControllerReference(cr, expectedRes, r.scheme)
+	if err != nil {
+		reqLogger.Error(err, "Failed to define expected resource")
+		return reconcile.Result{}, err
+	}
+
+	// If Role does not exist, create it and requeue
+	foundRole := &rbacv1.ClusterRole{}
+	// Note: clusterroles are cluster-scoped, so this does not search using namespace (unlike other resources above)
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: expectedRes.Name}, foundRole)
+	if err != nil && errors.IsNotFound(err) {
+		reqLogger.Info("Creating a new "+reflect.TypeOf(expectedRes).String(), "Name", expectedRes.Name)
+		err = r.client.Create(context.TODO(), expectedRes)
+		if err != nil && errors.IsAlreadyExists(err) {
+			// Already exists from previous reconcile, requeue.
+			return reconcile.Result{Requeue: true}, nil
+		} else if err != nil {
+			reqLogger.Error(err, "Failed to create new "+reflect.TypeOf(expectedRes).String(), "Name", expectedRes.Name)
+			return reconcile.Result{}, err
+		}
+		// Created successfully - return and requeue
+		return reconcile.Result{Requeue: true}, nil
+	} else if err != nil {
+		reqLogger.Error(err, "Failed to get "+reflect.TypeOf(expectedRes).String())
+		return reconcile.Result{}, err
+	} else if !reflect.DeepEqual(foundRole.Rules, expectedRes.Rules) {
+		// Spec is incorrect, update it and requeue
+		reqLogger.Info("Found role is incorrect", "Found", foundRole.Rules, "Expected", expectedRes.Rules)
+		foundRole.Rules = expectedRes.Rules
+		err = r.client.Update(context.TODO(), foundRole)
+		if err != nil {
+			reqLogger.Error(err, "Failed to update role", "Name", foundRole.Name)
+			return reconcile.Result{}, err
+		}
+		// Updated - return and requeue
+		return reconcile.Result{Requeue: true}, nil
+	}
+
+	// No reconcile was necessary
+	return reconcile.Result{}, nil
 }
 
-// IBMDEV rolebindingForCR returns a ClusterRoleBinding for the GRQ enforcer deployment
-func (r *ReconcileGroupResourceQuotaEnforcer) roleBindingForCR(cr *operatorv1alpha1.GroupResourceQuotaEnforcer) (*rbacv1.ClusterRoleBinding, error) {
-	retVal := &rbacv1.ClusterRoleBinding{
+// IBMDEV rolebindingForCR returns (reconcile.Result, error)
+func (r *ReconcileGroupResourceQuotaEnforcer) roleBindingForCR(cr *operatorv1alpha1.GroupResourceQuotaEnforcer) (reconcile.Result, error) {
+	reqLogger := log.WithValues("cr.Name", cr.Name)
+
+	expectedRes := &rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: cr.Name + suffix.clusterRoleBinding,
 		},
 		Subjects: []rbacv1.Subject{{
-			APIGroup: "",
-			Kind: "ServiceAccount",
-			Name: cr.Name + suffix.serviceAccount,
+			APIGroup:  "",
+			Kind:      "ServiceAccount",
+			Name:      cr.Name + suffix.serviceAccount,
 			Namespace: cr.Spec.InstanceNamespace,
 		}},
 		RoleRef: rbacv1.RoleRef{
 			APIGroup: "rbac.authorization.k8s.io",
-			Kind: "ClusterRole",
-			Name: cr.Name + suffix.clusterRole,
+			Kind:     "ClusterRole",
+			Name:     cr.Name + suffix.clusterRole,
 		},
 	}
 	// Set CR instance as the owner and controller
-	err := controllerutil.SetControllerReference(cr, retVal, r.scheme)
-	return retVal, err
+	err := controllerutil.SetControllerReference(cr, expectedRes, r.scheme)
+	if err != nil {
+		reqLogger.Error(err, "Failed to define expected resource")
+		return reconcile.Result{}, err
+	}
+
+	// If RoleBinding does not exist, create it and requeue
+	foundRoleBinding := &rbacv1.ClusterRoleBinding{}
+	// Note: clusterrolebindings are cluster-scoped, so this does not search using namespace (unlike other resources above)
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: expectedRes.Name}, foundRoleBinding)
+	if err != nil && errors.IsNotFound(err) {
+		reqLogger.Info("Creating a new "+reflect.TypeOf(expectedRes).String(), "Name", expectedRes.Name)
+		err = r.client.Create(context.TODO(), expectedRes)
+		if err != nil && errors.IsAlreadyExists(err) {
+			// Already exists from previous reconcile, requeue.
+			return reconcile.Result{Requeue: true}, nil
+		} else if err != nil {
+			reqLogger.Error(err, "Failed to create new "+reflect.TypeOf(expectedRes).String(), "Name", expectedRes.Name)
+			return reconcile.Result{}, err
+		}
+		// Created successfully - return and requeue
+		return reconcile.Result{Requeue: true}, nil
+	} else if err != nil {
+		reqLogger.Error(err, "Failed to get "+reflect.TypeOf(expectedRes).String())
+		return reconcile.Result{}, err
+	} else if !reflect.DeepEqual(foundRoleBinding.Subjects, expectedRes.Subjects) ||
+		!reflect.DeepEqual(foundRoleBinding.RoleRef, expectedRes.RoleRef) {
+		// Spec is incorrect, update it and requeue
+		reqLogger.Info("Found rolebinding is incorrect", "Found", foundRoleBinding, "Expected", expectedRes)
+		err = r.client.Delete(context.TODO(), foundRoleBinding)
+		if err != nil {
+			reqLogger.Error(err, "Failed to delete rolebinding", "Name", foundRoleBinding.Name)
+			return reconcile.Result{}, err
+		}
+		// Deleted - return and requeue
+		return reconcile.Result{Requeue: true}, nil
+	}
+
+	// No reconcile was necessary
+	return reconcile.Result{}, nil
 }
 
-// IBMDEV Slightly odd wraping to avoid long line
-// IBMDEV serviceAccountForCR returns a ServiceAccount for the GRQ enforcer deployment
-func (r *ReconcileGroupResourceQuotaEnforcer) webhookConfigForCR(
-		cr *operatorv1alpha1.GroupResourceQuotaEnforcer,
-	) (*admissionv1beta1.MutatingWebhookConfiguration, error) {
+// IBMDEV webhookConfigForCR returns (reconcile.Result, error)
+func (r *ReconcileGroupResourceQuotaEnforcer) webhookConfigForCR(cr *operatorv1alpha1.GroupResourceQuotaEnforcer) (reconcile.Result, error) {
+	reqLogger := log.WithValues("cr.Name", cr.Name)
 
 	path := "/mutate"
 	int32_443 := int32(443)
 	service := admissionv1beta1.ServiceReference{
 		Namespace: cr.Spec.InstanceNamespace,
-		Name: cr.Name + suffix.grqeService,
-		Path: &path,
-		Port: &int32_443,
+		Name:      cr.Name + suffix.grqeService,
+		Path:      &path,
+		Port:      &int32_443,
 	}
 	scope := admissionv1beta1.AllScopes
 
-	retVal := &admissionv1beta1.MutatingWebhookConfiguration{
+	expectedRes := &admissionv1beta1.MutatingWebhookConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: cr.Name + suffix.grqeWebhook,
 		},
@@ -841,15 +840,55 @@ func (r *ReconcileGroupResourceQuotaEnforcer) webhookConfigForCR(
 					admissionv1beta1.Delete,
 				},
 				Rule: admissionv1beta1.Rule{
-					APIGroups: []string{"*",},
-					APIVersions: []string{"*",},
-					Resources: []string{"resourcequotas",},
-					Scope: &scope,
+					APIGroups:   []string{"*"},
+					APIVersions: []string{"*"},
+					Resources:   []string{"resourcequotas"},
+					Scope:       &scope,
 				},
 			}},
 		}},
 	}
 	// Set CR instance as the owner and controller
-	err := controllerutil.SetControllerReference(cr, retVal, r.scheme)
-	return retVal, err
+	err := controllerutil.SetControllerReference(cr, expectedRes, r.scheme)
+	if err != nil {
+		reqLogger.Error(err, "Failed to define expected resource")
+		return reconcile.Result{}, err
+	}
+
+	// If MutatingWebhookConfig does not exist, create it and requeue
+	foundWebhookConfig := &admissionv1beta1.MutatingWebhookConfiguration{}
+	// Note: mutatingwebhookconfigurations are cluster-scoped, so this does not search using namespace (unlike other resources above)
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: expectedRes.Name}, foundWebhookConfig)
+	if err != nil && errors.IsNotFound(err) {
+		reqLogger.Info("Creating a new MutatingWebhookConfig", "Namespace", cr.Spec.InstanceNamespace, "Name", expectedRes.Name)
+		err = r.client.Create(context.TODO(), expectedRes)
+		if err != nil && errors.IsAlreadyExists(err) {
+			// Already exists from previous reconcile, requeue.
+			return reconcile.Result{Requeue: true}, nil
+		} else if err != nil {
+			reqLogger.Error(err, "Failed to create new MutatingWebhookConfig", "Namespace", cr.Spec.InstanceNamespace, "Name", expectedRes.Name)
+			return reconcile.Result{}, err
+		}
+		// Created successfully - return and requeue
+		return reconcile.Result{Requeue: true}, nil
+	} else if err != nil {
+		reqLogger.Error(err, "Failed to get MutatingWebhookConfig")
+		return reconcile.Result{}, err
+	} else if len(foundWebhookConfig.Webhooks) != len(expectedRes.Webhooks) ||
+		!reflect.DeepEqual(foundWebhookConfig.Webhooks[0].ClientConfig, expectedRes.Webhooks[0].ClientConfig) ||
+		!reflect.DeepEqual(foundWebhookConfig.Webhooks[0].Rules, expectedRes.Webhooks[0].Rules) {
+		// Spec is incorrect, update it and requeue
+		reqLogger.Info("Found MutatingWebhookConfig is incorrect", "Found", foundWebhookConfig.Webhooks, "Expected", expectedRes.Webhooks)
+		foundWebhookConfig.Webhooks = expectedRes.Webhooks
+		err = r.client.Update(context.TODO(), foundWebhookConfig)
+		if err != nil {
+			reqLogger.Error(err, "Failed to update MutatingWebhookConfig", "Name", foundWebhookConfig.Name)
+			return reconcile.Result{}, err
+		}
+		// Deleted - return and requeue
+		return reconcile.Result{Requeue: true}, nil
+	}
+
+	// No reconcile was necessary
+	return reconcile.Result{}, nil
 }

@@ -31,7 +31,7 @@ type GroupResourceQuotaEnforcerSpec struct {
 	// Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
 
 	// ImageRegistry is the image repository
-    ImageRegistry string `json:"imageRegistry"`
+	ImageRegistry string `json:"imageRegistry"`
 	// ImageRegistry is the optional secret to use when pulling from the ImageRegistry
 	ImagePullSecret string `json:"imagePullSecret"`
 	// InstanceNamespace is the namespace in which to place the namespaced resources (e.g. workloads) for the CR instance
@@ -47,8 +47,8 @@ type GroupResourceQuotaEnforcerStatus struct {
 	// Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
 
 	// Nodes are the names of the grq pods
-    // +listType=set
-    Nodes []string `json:"nodes"`
+	// +listType=set
+	Nodes []string `json:"nodes"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
