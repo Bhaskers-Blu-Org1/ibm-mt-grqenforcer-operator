@@ -68,7 +68,7 @@ type grqeNameSuffix struct {
 	clusterRoleBinding string
 }
 
-var suffix grqeNameSuffix = grqeNameSuffix{
+var suffix = grqeNameSuffix{
 	//certSecret:       "-grqe-crt",	/*currently unused, see commented out code blocks*/
 	grqeDeployment:     "-grqe-dep",
 	grqeService:        "-grqe-svc",
