@@ -1,0 +1,209 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: |-
+      [
+        {
+          "apiVersion": "operator.ibm.com/v1alpha1",
+          "kind": "GroupResourceQuotaEnforcer",
+          "metadata": {
+            "name": "example-grqenforcer"
+          },
+          "spec": {
+            "certSecret": "cert-secret",
+            "imageRegistry": "ibmcom",
+            "instanceNamespace": "default"
+          }
+        }
+      ]
+    capabilities: Basic Install
+  name: ibm-mt-grqenforcer-operator.v2.0.0
+  namespace: placeholder
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - description: GroupResourceQuotaEnforcer is the Schema for the groupresourcequotaenforcers
+        API
+      kind: GroupResourceQuotaEnforcer
+      name: groupresourcequotaenforcers.operator.ibm.com
+      version: v1alpha1
+  description: Placeholder description
+  displayName: Ibm Mt Grqenforcer Operator
+  install:
+    spec:
+      clusterPermissions:
+      - rules:
+        - apiGroups:
+          - ""
+          resources:
+          - pods
+          - services
+          - services/finalizers
+          - endpoints
+          - persistentvolumeclaims
+          - events
+          - configmaps
+          - secrets
+          - serviceaccounts
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - apps
+          resources:
+          - deployments
+          - daemonsets
+          - replicasets
+          - statefulsets
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - monitoring.coreos.com
+          resources:
+          - servicemonitors
+          verbs:
+          - get
+          - create
+        - apiGroups:
+          - apps
+          resourceNames:
+          - ibm-mt-grqenforcer-operator
+          resources:
+          - deployments/finalizers
+          verbs:
+          - update
+        - apiGroups:
+          - ""
+          resources:
+          - pods
+          verbs:
+          - get
+        - apiGroups:
+          - apps
+          resources:
+          - replicasets
+          - deployments
+          verbs:
+          - get
+        - apiGroups:
+          - operator.ibm.com
+          resources:
+          - '*'
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - admissionregistration.k8s.io
+          resources:
+          - mutatingwebhookconfigurations
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - rbac.authorization.k8s.io
+          resources:
+          - clusterroles
+          - clusterrolebindings
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - groupresourcequotas
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - namespaces
+          - resourcequotas
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        serviceAccountName: ibm-mt-grqenforcer-role
+      deployments:
+      - name: ibm-mt-grqenforcer-operator
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              name: ibm-mt-grqenforcer-operator
+          strategy: {}
+          template:
+            metadata:
+              labels:
+                name: ibm-mt-grqenforcer-operator
+            spec:
+              containers:
+              - command:
+                - ibm-mt-grqenforcer-operator
+                env:
+                - name: WATCH_NAMESPACE
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.annotations['olm.targetNamespaces']
+                - name: POD_NAME
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.name
+                - name: OPERATOR_NAME
+                  value: ibm-mt-grqenforcer-operator
+                image: ibmcom/ibm-mt-grq-operator-image:2.0.0
+                imagePullPolicy: IfNotPresent
+                name: ibm-mt-grqenforcer-operator
+                resources: {}
+              serviceAccountName: ibm-mt-grqenforcer-operator
+    strategy: deployment
+  installModes:
+  - supported: true
+    type: OwnNamespace
+  - supported: true
+    type: SingleNamespace
+  - supported: false
+    type: MultiNamespace
+  - supported: true
+    type: AllNamespaces
+  maturity: alpha
+  provider: {}
+  replaces: ibm-mt-grqenforcer-operator.v0.0.0
+  version: 2.0.0

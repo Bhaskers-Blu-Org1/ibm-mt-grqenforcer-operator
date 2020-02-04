@@ -29,3 +29,4 @@ Operator for enforcement of GroupResourceQuotas in a multitenant cluster.
 1. Verify make targets locally: `check`, `test`, `build`, `images`
 1. Ensure `test-infra` onboarding is complete
 1. Push upstream to create PR, which will trigger Prow CICD pipeline
+1. Create CSV with `operator-sdk olm-catalog gen-csv --csv-version 2.0.0`
