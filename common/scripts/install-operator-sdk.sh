@@ -17,8 +17,8 @@
 
 echo ">>> Installing Operator SDK"
 
-# IBMDEV Use version 0.14.1
-RELEASE_VERSION=v0.14.1
+# Use version 0.10.0
+RELEASE_VERSION=v0.12.0
 # Download binary
 curl -LO https://github.com/operator-framework/operator-sdk/releases/download/${RELEASE_VERSION}/operator-sdk-${RELEASE_VERSION}-x86_64-linux-gnu
 # Install binary
