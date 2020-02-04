@@ -12,24 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-#IBMDEV Workaround these variables not being set -- not clear how these variables would normally be created with correct values.
-#DOCKER_USERNAME ?= ${DOCKER_USERNAME}
-#DOCKER_PASSWORD ?= ${DOCKER_PASSWORD}
-DOCKER_USERNAME = $(shell printenv DOCKER_USERNAME)
-DOCKER_PASSWORD = $(shell printenv DOCKER_PASSWORD)
-ifeq ($(DOCKER_USERNAME),)
-	DOCKER_USERNAME = "dummyval"
-endif
-ifeq ($(DOCKER_PASSWORD),)
-	DOCKER_PASSWORD = "dummyval"
-endif
+# This repo is build locally for dev/test by default;
+# Override this variable in CI env.
+BUILD_LOCALLY ?= 1
 
 # Image URL to use all building/pushing image targets;
-# Use your own docker registry and image name for dev/test by overridding the
-# IMAGE_REPO, IMAGE_NAME and RELEASE_TAG environment variable.
-#IBMDEV Switch to opencloudio and grqe image name
-IMAGE_REPO ?= quay.io/opencloudio
-IMAGE_NAME ?= ibm-mt-grqe-operator-image
+# Use your own docker registry and image name for dev/test by overridding the IMG and REGISTRY environment variable.
+# IBMDEV Set image and repo
+IMG ?= ibm-mt-grqe-operator-image
+REGISTRY ?= quay.io/opencloudio
 
 # Github host to use for checking the source tree;
 # Override this variable ue with your own value if you're working on forked repo.
@@ -46,7 +37,7 @@ export GOBIN ?= $(GOBIN_DEFAULT)
 TESTARGS_DEFAULT := "-v"
 export TESTARGS ?= $(TESTARGS_DEFAULT)
 DEST := $(GOPATH)/src/$(GIT_HOST)/$(BASE_DIR)
-RELEASE_TAG ?= $(shell git describe --exact-match 2> /dev/null || \
+VERSION ?= $(shell git describe --exact-match 2> /dev/null || \
                  git describe --match=$(git rev-parse --short=8 HEAD) --always --dirty --abbrev=8)
 
 LOCAL_OS := $(shell uname)
@@ -60,30 +51,16 @@ else
     $(error "This system's OS $(LOCAL_OS) isn't recognized/supported")
 endif
 
-ARCH := $(shell uname -m)
-BUILD_ARCH := "amd64"
-ifeq ($(ARCH),x86_64)
-    BUILD_ARCH="amd64"
-else ifeq ($(ARCH),ppc64le)
-    BUILD_ARCH="ppc64le"
-else ifeq ($(ARCH),s390x)
-    BUILD_ARCH="s390x"
-else
-    $(error "This system's ARCH $(ARCH) isn't recognized/supported")
-endif
+all: fmt check test coverage build images
 
-.PHONY: all work fmt check coverage lint test build image build-push-image multiarch-image clean
-
-all: fmt check test coverage build image
-
-ifeq (,$(wildcard go.mod))
-ifneq ("$(realpath $(DEST))", "$(realpath $(PWD))")
-    $(error Please run 'make' from $(DEST). Current directory is $(PWD))
-endif
+#IBMDEV If not using a set GOPATH env var, this check fails
+ifeq ($(BUILD_LOCALLY),0)
+    ifneq ("$(realpath $(DEST))", "$(realpath $(PWD))")
+        $(error Please run 'make' from $(DEST). Current directory is $(PWD))
+    endif
 endif
 
 include common/Makefile.common.mk
-
 
 ############################################################
 # work section
@@ -109,10 +86,10 @@ fmt: format-go format-protos format-python
 
 check: lint
 
+
 # All available linters: lint-dockerfiles lint-scripts lint-yaml lint-copyright-banner lint-go lint-python lint-helm lint-markdown lint-sass lint-typescript lint-protos
 # Default value will run all linters, override these make target with your requirements:
 #    eg: lint: lint-go lint-yaml
-# The MARKDOWN_LINT_WHITELIST variable can be set with comma separated urls you want to whitelist
 lint: lint-all
 
 ############################################################
@@ -127,45 +104,45 @@ test:
 ############################################################
 
 coverage:
-	@common/scripts/codecov.sh
+	@common/scripts/codecov.sh ${BUILD_LOCALLY}
+
+############################################################
+# install operator sdk section
+############################################################
+
+install-operator-sdk:
+	@operator-sdk version 2> /dev/null ; if [ $$? -ne 0 ]; then ./common/scripts/install-operator-sdk.sh; fi
 
 ############################################################
 # build section
 ############################################################
-#IBMDEV Switch to ibm-mt-grqenforcer-operator binary name
+
 build:
-	@common/scripts/gobuild.sh ibm-mt-grqenforcer-operator ./cmd
+	@common/scripts/gobuild.sh build/_output/bin/$(IMG) ./cmd/manager
+
+local:
+	@GOOS=darwin common/scripts/gobuild.sh build/_output/bin/$(IMG) ./cmd/manager
 
 ############################################################
-# image section
+# images section
 ############################################################
 
-image: build build-push-image
+images: build build-push-images
 
+ifeq ($(BUILD_LOCALLY),0)
+    export CONFIG_DOCKER_TARGET = config-docker
 config-docker:
-	@docker login "$(IMAGE_REPO)" -u "${DOCKER_USERNAME}" -p "${DOCKER_PASSWORD}"
+endif
 
-#IBMDEV Move build PRIOR to config-docker to ensure it builds whether the login and push are successful or not
-build-image:
-	@docker build . -f Dockerfile -t $(IMAGE_REPO)/$(IMAGE_NAME)-$(BUILD_ARCH):$(RELEASE_TAG)
-	@docker tag $(IMAGE_REPO)/$(IMAGE_NAME)-$(BUILD_ARCH):$(RELEASE_TAG) $(IMAGE_REPO)/$(IMAGE_NAME)-$(BUILD_ARCH):latest
-
-build-push-image: build-image config-docker
-	#@docker build . -f Dockerfile -t $(IMAGE_REPO)/$(IMAGE_NAME)-$(BUILD_ARCH):$(RELEASE_TAG)
-	#@docker tag $(IMAGE_REPO)/$(IMAGE_NAME)-$(BUILD_ARCH):$(RELEASE_TAG) $(IMAGE_REPO)/$(IMAGE_NAME)-$(BUILD_ARCH):latest
-	@docker push $(IMAGE_REPO)/$(IMAGE_NAME)-$(BUILD_ARCH):$(RELEASE_TAG)
-	@docker push $(IMAGE_REPO)/$(IMAGE_NAME)-$(BUILD_ARCH):latest
-	@docker logout "$(IMAGE_REPO)"
-
-############################################################
-# multiarch-image section
-############################################################
-
-multiarch-image: config-docker multi-arch
+build-push-images: install-operator-sdk $(CONFIG_DOCKER_TARGET)
+	@operator-sdk build $(REGISTRY)/$(IMG):$(VERSION)
+	@docker tag $(REGISTRY)/$(IMG):$(VERSION) $(REGISTRY)/$(IMG)
+	@if [ $(BUILD_LOCALLY) -ne 1 ]; then docker push $(REGISTRY)/$(IMG):$(VERSION); docker push $(REGISTRY)/$(IMG); fi
 
 ############################################################
 # clean section
 ############################################################
-#IBMDEV Switch to grqe binary name
 clean:
-	@rm -f ibm-mt-grqenforcer-operator
+	rm -f build/_output/bin/$(IMG)
+
+.PHONY: all build check lint test coverage images

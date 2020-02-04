@@ -13,3 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
+
+package controller
+
+import (
+	"github.ibm.com/IBMPrivateCloud/ibm-mt-grqenforcer-operator/pkg/controller/groupresourcequotaenforcer"
+)
+
+func init() {
+	// AddToManagerFuncs is a list of functions to create controllers and add them to a manager.
+	AddToManagerFuncs = append(AddToManagerFuncs, groupresourcequotaenforcer.Add)
+}

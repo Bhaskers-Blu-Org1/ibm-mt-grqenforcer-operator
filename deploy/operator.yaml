@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ibm-mt-grqenforcer-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: ibm-mt-grqenforcer-operator
+  template:
+    metadata:
+      labels:
+        name: ibm-mt-grqenforcer-operator
+    spec:
+      serviceAccountName: ibm-mt-grqenforcer-operator
+      containers:
+        - name: ibm-mt-grqenforcer-operator
+          # Replace this with the built image name
+          image: ibmcom/ibm-mt-grq-operator-image:2.0.0
+          command:
+          - ibm-mt-grqenforcer-operator
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: WATCH_NAMESPACE
+              value: ""
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: OPERATOR_NAME
+              value: "ibm-mt-grqenforcer-operator"

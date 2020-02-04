@@ -1,0 +1,8 @@
+apiVersion: operator.ibm.com/v1alpha1
+kind: GroupResourceQuotaEnforcer
+metadata:
+  name: example-grqenforcer
+spec:
+  imageRegistry: ibmcom
+  instanceNamespace: default
+  certSecret: cert-secret
