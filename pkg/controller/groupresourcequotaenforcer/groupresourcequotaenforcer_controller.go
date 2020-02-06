@@ -376,7 +376,6 @@ func (r *ReconcileGroupResourceQuotaEnforcer) deploymentForCR(cr *operatorv1alph
 		!reflect.DeepEqual(foundDeployment.Spec.Template.Spec.Containers[0].Name, expectedRes.Spec.Template.Spec.Containers[0].Name) ||
 		!reflect.DeepEqual(foundDeployment.Spec.Template.Spec.Containers[0].Image, expectedRes.Spec.Template.Spec.Containers[0].Image) ||
 		!reflect.DeepEqual(foundDeployment.Spec.Template.Spec.Containers[0].Args, expectedRes.Spec.Template.Spec.Containers[0].Args) ||
-		!reflect.DeepEqual(foundDeployment.Spec.Template.Spec.Containers[0].Port, expectedRes.Spec.Template.Spec.Containers[0].Port) ||
 		!reflect.DeepEqual(foundDeployment.Spec.Template.Spec.Containers[0].VolumeMounts, expectedRes.Spec.Template.Spec.Containers[0].VolumeMounts) {
 		// Spec is incorrect, update it and requeue
 		reqLogger.Info("Found deployment spec is incorrect", "Found", foundDeployment.Spec.Template.Spec, "Expected", expectedRes.Spec.Template.Spec)
@@ -820,6 +819,7 @@ func (r *ReconcileGroupResourceQuotaEnforcer) webhookConfigForCR(cr *operatorv1a
 		Namespace: cr.Spec.InstanceNamespace,
 		Name:      cr.Name + suffix.grqeService,
 		Path:      &path,
+		Port:      &int32_443,
 	}
 	scope := admissionv1beta1.AllScopes
 
