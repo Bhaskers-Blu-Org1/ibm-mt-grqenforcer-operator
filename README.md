@@ -7,8 +7,8 @@ Operator for enforcement of GroupResourceQuotas in a multitenant cluster.
 1. Create copy of go-repo-template
 1. Update template contents
    - Fix image and binary names/versions in code/scripts/gitignore
-   - Move `.travis.yaml` and `Dockerfile` to new `bak/` directory -- build will use Prow rather than Travis
-   - Move `cmd/`, `pkg/`, `go.mod`, and `go.sum` to `bak/` directory
+   - Delete `.travis.yaml` and `Dockerfile` -- build will use Prow rather than Travis
+   - Delete `cmd/`, `pkg/`, `go.mod`, and `go.sum`
    - Update `hack/boilerplate.go.txt` with correct copyright statement
 1. Update Makefile with content from `multicloud-operators-subscription`/`ibm-metering-operator` (preferred)
    - Fix `IMG` and `REGISTRY` values in Makefile
