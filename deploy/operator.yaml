@@ -16,7 +16,7 @@ spec:
       containers:
         - name: ibm-mt-grqenforcer-operator
           # Replace this with the built image name
-          image: ibmcom/ibm-mt-grq-operator-image:2.0.0
+          image: quay.io/opencloudio/ibm-mt-grqe-operator-image:2.0.0
           command:
           - ibm-mt-grqenforcer-operator
           imagePullPolicy: IfNotPresent

@@ -3,6 +3,6 @@ kind: GroupResourceQuotaEnforcer
 metadata:
   name: example-grqenforcer
 spec:
-  imageRegistry: ibmcom
-  instanceNamespace: default
+  imageRegistry: quay.io/opencloudio
+  instanceNamespace: services
   certSecret: cert-secret

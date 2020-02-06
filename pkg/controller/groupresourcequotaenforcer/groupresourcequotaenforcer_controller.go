@@ -151,8 +151,8 @@ type ReconcileGroupResourceQuotaEnforcer struct {
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
 func (r *ReconcileGroupResourceQuotaEnforcer) Reconcile(request reconcile.Request) (reconcile.Result, error) {
-	// IBMDEV As operator/CR are cluster scoped, omit request.Namespace from logging values
-	reqLogger := log.WithValues("CR.Name", request.Name)
+	// IBMDEV As operator/CR are cluster scoped, request.Namespace is expected to be empty string
+	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 
 	// IBMDEV
 
@@ -376,7 +376,7 @@ func (r *ReconcileGroupResourceQuotaEnforcer) deploymentForCR(cr *operatorv1alph
 		!reflect.DeepEqual(foundDeployment.Spec.Template.Spec.Containers[0].Name, expectedRes.Spec.Template.Spec.Containers[0].Name) ||
 		!reflect.DeepEqual(foundDeployment.Spec.Template.Spec.Containers[0].Image, expectedRes.Spec.Template.Spec.Containers[0].Image) ||
 		!reflect.DeepEqual(foundDeployment.Spec.Template.Spec.Containers[0].Args, expectedRes.Spec.Template.Spec.Containers[0].Args) ||
-		!reflect.DeepEqual(foundDeployment.Spec.Template.Spec.Containers[0].Ports, expectedRes.Spec.Template.Spec.Containers[0].Ports) ||
+		!reflect.DeepEqual(foundDeployment.Spec.Template.Spec.Containers[0].Port, expectedRes.Spec.Template.Spec.Containers[0].Port) ||
 		!reflect.DeepEqual(foundDeployment.Spec.Template.Spec.Containers[0].VolumeMounts, expectedRes.Spec.Template.Spec.Containers[0].VolumeMounts) {
 		// Spec is incorrect, update it and requeue
 		reqLogger.Info("Found deployment spec is incorrect", "Found", foundDeployment.Spec.Template.Spec, "Expected", expectedRes.Spec.Template.Spec)
@@ -820,7 +820,6 @@ func (r *ReconcileGroupResourceQuotaEnforcer) webhookConfigForCR(cr *operatorv1a
 		Namespace: cr.Spec.InstanceNamespace,
 		Name:      cr.Name + suffix.grqeService,
 		Path:      &path,
-		Port:      &int32_443,
 	}
 	scope := admissionv1beta1.AllScopes
 
@@ -875,7 +874,9 @@ func (r *ReconcileGroupResourceQuotaEnforcer) webhookConfigForCR(cr *operatorv1a
 		reqLogger.Error(err, "Failed to get MutatingWebhookConfig")
 		return reconcile.Result{}, err
 	} else if len(foundWebhookConfig.Webhooks) != len(expectedRes.Webhooks) ||
-		!reflect.DeepEqual(foundWebhookConfig.Webhooks[0].ClientConfig, expectedRes.Webhooks[0].ClientConfig) ||
+		!reflect.DeepEqual(foundWebhookConfig.Webhooks[0].ClientConfig.Service.Name, expectedRes.Webhooks[0].ClientConfig.Service.Name) ||
+		!reflect.DeepEqual(foundWebhookConfig.Webhooks[0].ClientConfig.Service.Namespace, expectedRes.Webhooks[0].ClientConfig.Service.Namespace) ||
+		!reflect.DeepEqual(foundWebhookConfig.Webhooks[0].ClientConfig.Service.Path, expectedRes.Webhooks[0].ClientConfig.Service.Path) ||
 		!reflect.DeepEqual(foundWebhookConfig.Webhooks[0].Rules, expectedRes.Webhooks[0].Rules) {
 		// Spec is incorrect, update it and requeue
 		reqLogger.Info("Found MutatingWebhookConfig is incorrect", "Found", foundWebhookConfig.Webhooks, "Expected", expectedRes.Webhooks)
