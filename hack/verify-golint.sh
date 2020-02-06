@@ -1,3 +1,6 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2207
+
 #
 # Copyright 2020 IBM Corporation
 #
