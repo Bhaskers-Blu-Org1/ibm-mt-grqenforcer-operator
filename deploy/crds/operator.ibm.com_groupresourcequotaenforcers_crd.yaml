@@ -36,8 +36,19 @@ spec:
             imageRegistry:
               description: ImageRegistry is the image repository
               type: string
+            imagePullSecret:
+              description: ImagePullSecret is the name of the image pull secret, if necessary
+              type: string
+            instanceNamespace:
+              description: InstanceNamespace is the namespace to which operands will be deployed
+              type: string
+            certSecret:
+              description: CertSecret is the TLS certificate secret
+              type: string
           required:
           - imageRegistry
+          - instanceNamespace
+          - certSecret
           type: object
         status:
           description: GroupResourceQuotaEnforcerStatus defines the observed state
