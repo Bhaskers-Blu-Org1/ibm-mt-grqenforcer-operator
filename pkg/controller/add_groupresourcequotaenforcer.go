@@ -17,7 +17,7 @@
 package controller
 
 import (
-	"github.ibm.com/IBMPrivateCloud/ibm-mt-grqenforcer-operator/pkg/controller/groupresourcequotaenforcer"
+	"github.com/IBM/ibm-mt-grqenforcer-operator/pkg/controller/groupresourcequotaenforcer"
 )
 
 func init() {

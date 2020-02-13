@@ -22,12 +22,14 @@ import (
 	// IBMDEV
 	"reflect"
 
+	operatorv1alpha1 "github.com/IBM/ibm-mt-grqenforcer-operator/pkg/apis/operator/v1alpha1"
+	"github.com/IBM/ibm-mt-grqenforcer-operator/version"
+
 	admissionv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	operatorv1alpha1 "github.ibm.com/IBMPrivateCloud/ibm-mt-grqenforcer-operator/pkg/apis/operator/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -173,6 +175,14 @@ func (r *ReconcileGroupResourceQuotaEnforcer) Reconcile(request reconcile.Reques
 	var recResult reconcile.Result
 	var recErr error
 
+	// TODO:
+	// Reconcile - create grqe-ca-issuer (self signed)
+	// Reconcile - create grqe-ca-cert (isCA) from grqe-ca-issuer
+	// Reconcile - create grqe-issuer referencing grqe-ca
+	// Reconcile - create gqre-cert from grqe-issuer
+	// Update deployments to use gqre-cert-secret created by certmanager
+	// Update CRD to no longer take certSecret spec param
+
 	// Reconcile the expected deployment
 	recResult, recErr = r.deploymentForCR(cr)
 	if recErr != nil || recResult.Requeue {
@@ -263,6 +273,15 @@ func (r *ReconcileGroupResourceQuotaEnforcer) Reconcile(request reconcile.Reques
 }
 
 //IBMDEV
+func meteringAnnotations() map[string]string {
+	return map[string]string{
+		"productName":    version.Name,
+		"productID":      version.Name,
+		"productVersion": version.Version,
+	}
+}
+
+//IBMDEV
 func labelsForDeployment(crName string) map[string]string {
 	return map[string]string{"app": "groupresourcequotaenforcer", "groupresourcequotaenforcer_cr": crName}
 }
@@ -303,12 +322,13 @@ func (r *ReconcileGroupResourceQuotaEnforcer) deploymentForCR(cr *operatorv1alph
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: ls,
+					Labels:      ls,
+					Annotations: meteringAnnotations(),
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: cr.Name + suffix.serviceAccount,
 					Containers: []corev1.Container{{
-						Image:           cr.Spec.ImageRegistry + "/ibm-mt-groupresourcequota:2.0.0",
+						Image:           cr.Spec.ImageRegistry + "/ibm-mt-groupresourcequota:" + version.Version,
 						Name:            "ibm-mt-grq-enforcer",
 						ImagePullPolicy: "IfNotPresent",
 						Args: []string{
@@ -430,7 +450,7 @@ func (r *ReconcileGroupResourceQuotaEnforcer) bridgeDeploymentForCR(cr *operator
 				Spec: corev1.PodSpec{
 					ServiceAccountName: cr.Name + suffix.serviceAccount,
 					Containers: []corev1.Container{{
-						Image:           cr.Spec.ImageRegistry + "/ibm-mt-iam-bridge:2.0.0",
+						Image:           cr.Spec.ImageRegistry + "/ibm-mt-iam-bridge:" + version.Version,
 						Name:            "ibm-mt-iam-bridge",
 						ImagePullPolicy: "IfNotPresent",
 						Args: []string{

@@ -1,4 +1,4 @@
-module github.ibm.com/IBMPrivateCloud/ibm-mt-grqenforcer-operator
+module github.com/IBM/ibm-mt-grqenforcer-operator
 
 go 1.13
 

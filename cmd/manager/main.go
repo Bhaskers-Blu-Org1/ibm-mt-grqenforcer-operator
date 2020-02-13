@@ -28,9 +28,9 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
 
-	"github.ibm.com/IBMPrivateCloud/ibm-mt-grqenforcer-operator/pkg/apis"
-	"github.ibm.com/IBMPrivateCloud/ibm-mt-grqenforcer-operator/pkg/controller"
-	"github.ibm.com/IBMPrivateCloud/ibm-mt-grqenforcer-operator/version"
+	"github.com/IBM/ibm-mt-grqenforcer-operator/pkg/apis"
+	"github.com/IBM/ibm-mt-grqenforcer-operator/pkg/controller"
+	"github.com/IBM/ibm-mt-grqenforcer-operator/version"
 
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	kubemetrics "github.com/operator-framework/operator-sdk/pkg/kube-metrics"

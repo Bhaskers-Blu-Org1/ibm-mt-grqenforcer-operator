@@ -5,7 +5,7 @@ metadata:
 subjects:
 - kind: ServiceAccount
   name: ibm-mt-grqenforcer-operator
-  namespace: default
+  namespace: services
 roleRef:
   kind: ClusterRole
   name: ibm-mt-grqenforcer-role

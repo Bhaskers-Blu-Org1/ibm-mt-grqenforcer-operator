@@ -16,10 +16,12 @@ spec:
       containers:
         - name: ibm-mt-grqenforcer-operator
           # Replace this with the built image name
-          image: quay.io/opencloudio/ibm-mt-grqe-operator-image:2.0.0
+          image: quay.io/opencloudio/ibm-mt-grqe-operator-image:latest
           command:
           - ibm-mt-grqenforcer-operator
-          imagePullPolicy: IfNotPresent
+          # args:
+          # - -tlsCertFile=/etc/webhook/certs/cert.pem
+          imagePullPolicy: Always
           env:
             - name: WATCH_NAMESPACE
               value: ""
@@ -29,3 +31,11 @@ spec:
                   fieldPath: metadata.name
             - name: OPERATOR_NAME
               value: "ibm-mt-grqenforcer-operator"
+          volumeMounts:
+            - name: webhook-certs
+              mountPath: /etc/webhook/certs
+              readOnly: true
+      volumes:
+        - name: webhook-certs
+          secret:
+            secretName: ca-cert-secret
