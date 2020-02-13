@@ -17,7 +17,7 @@
 package apis
 
 import (
-	"github.ibm.com/IBMPrivateCloud/ibm-mt-grqenforcer-operator/pkg/apis/operator/v1alpha1"
+	"github.com/IBM/ibm-mt-grqenforcer-operator/pkg/apis/operator/v1alpha1"
 )
 
 func init() {
