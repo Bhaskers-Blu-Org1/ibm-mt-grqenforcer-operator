@@ -119,8 +119,19 @@ install-operator-sdk:
 # build section
 ############################################################
 
-build:
-	@common/scripts/gobuild.sh build/_output/bin/$(IMG) ./cmd/manager
+build: build-amd64 build-ppc64le build-s390x
+
+build-amd64:
+	@echo "Building the ${IMG} amd64 binary..."
+	@GOARCH=amd64 common/scripts/gobuild.sh build/_output/bin/$(IMG) ./cmd/manager
+
+build-ppc64le:
+	@echo "Building the ${IMG} ppc64le binary..."
+	@GOARCH=ppc64le common/scripts/gobuild.sh build/_output/bin/$(IMG)-ppc64le ./cmd/manager
+
+build-s390x:
+	@echo "Building the ${IMG} s390x binary..."
+	@GOARCH=s390x common/scripts/gobuild.sh build/_output/bin/$(IMG)-s390x ./cmd/manager
 
 local:
 	@GOOS=darwin common/scripts/gobuild.sh build/_output/bin/$(IMG) ./cmd/manager
@@ -129,17 +140,49 @@ local:
 # images section
 ############################################################
 
-images: build build-push-images
-
 ifeq ($(BUILD_LOCALLY),0)
     export CONFIG_DOCKER_TARGET = config-docker
 config-docker:
 endif
 
-build-push-images: install-operator-sdk $(CONFIG_DOCKER_TARGET)
-	@operator-sdk build $(REGISTRY)/$(IMG):$(VERSION)
-	@docker tag $(REGISTRY)/$(IMG):$(VERSION) $(REGISTRY)/$(IMG)
-	@if [ $(BUILD_LOCALLY) -ne 1 ]; then docker push $(REGISTRY)/$(IMG):$(VERSION); docker push $(REGISTRY)/$(IMG); fi
+
+build-image-amd64: build-amd64
+	@docker build -t $(REGISTRY)/$(IMG)-amd64:$(VERSION) $(DOCKER_BUILD_OPTS) --build-arg "IMAGE_NAME_ARCH=$(IMAGE_NAME)-amd64" -f build/Dockerfile .
+
+build-image-ppc64le: build-ppc64le
+	@docker run --rm --privileged multiarch/qemu-user-static:register --reset
+	@docker build -t $(REGISTRY)/$(IMG)-ppc64le:$(VERSION) $(DOCKER_BUILD_OPTS) --build-arg "IMAGE_NAME_ARCH=$(IMAGE_NAME)-ppc64le" -f build/Dockerfile.ppc64le .
+
+build-image-s390x: build-s390x
+	@docker run --rm --privileged multiarch/qemu-user-static:register --reset
+	@docker build -t $(REGISTRY)/$(IMG)-s390x:$(VERSION) $(DOCKER_BUILD_OPTS) --build-arg "IMAGE_NAME_ARCH=$(IMAGE_NAME)-s390x" -f build/Dockerfile.s390x .
+
+push-image-amd64: $(CONFIG_DOCKER_TARGET) build-image-amd64
+	@docker push $(REGISTRY)/$(IMG)-amd64:$(VERSION)
+
+push-image-ppc64le: $(CONFIG_DOCKER_TARGET) build-image-ppc64le
+	@docker push $(REGISTRY)/$(IMG)-ppc64le:$(VERSION)
+
+push-image-s390x: $(CONFIG_DOCKER_TARGET) build-image-s390x
+	@docker push $(REGISTRY)/$(IMG)-s390x:$(VERSION)
+
+############################################################
+# multiarch-image section
+############################################################
+
+images: push-image-amd64 push-image-ppc64le push-image-s390x multiarch-image
+
+multiarch-image:
+	@curl -L -o /tmp/manifest-tool https://github.com/estesp/manifest-tool/releases/download/v1.0.0/manifest-tool-linux-amd64
+	@chmod +x /tmp/manifest-tool
+	/tmp/manifest-tool push from-args --platforms linux/amd64,linux/ppc64le,linux/s390x --template $(REGISTRY)/$(IMG)-ARCH:$(VERSION) --target $(REGISTRY)/$(IMG) --ignore-missing
+	/tmp/manifest-tool push from-args --platforms linux/amd64,linux/ppc64le,linux/s390x --template $(REGISTRY)/$(IMG)-ARCH:$(VERSION) --target $(REGISTRY)/$(IMG):$(VERSION) --ignore-missing
+
+############################################################
+# CSV section
+############################################################
+csv: ## Push CSV package to the catalog
+	@RELEASE=${CSV_VERSION} common/scripts/push-csv.sh
 
 ############################################################
 # clean section
