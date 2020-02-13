@@ -924,7 +924,7 @@ func (r *ReconcileGroupResourceQuotaEnforcer) webhookConfigForCR(cr *operatorv1a
 	return reconcile.Result{}, nil
 }
 
-// IBMDEV webhookConfigForCR returns (reconcile.Result, error)
+// IBMDEV certificateForCR returns (reconcile.Result, error)
 func (r *ReconcileGroupResourceQuotaEnforcer) certificateForCR(cr *operatorv1alpha1.GroupResourceQuotaEnforcer) (reconcile.Result, error) {
 	reqLogger := log.WithValues("cr.Name", cr.Name)
 
