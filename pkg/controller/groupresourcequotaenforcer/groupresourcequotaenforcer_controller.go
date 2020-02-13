@@ -30,6 +30,8 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
+	certmanagerv1alpha1 "github.com/jetstack/cert-manager/pkg/apis/certmanager/v1alpha1"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -59,7 +61,8 @@ As such, it provides an overview of the required pieces for the enforcement comp
 Note however that the certSecret isn't currently used (secret name is provided by CR param instead).
 */
 type grqeNameSuffix struct {
-	//certSecret       string	/*currently unused, see commented out code blocks*/
+	cert               string
+	certSecret         string
 	grqeDeployment     string
 	grqeService        string
 	grqeWebhook        string
@@ -71,7 +74,8 @@ type grqeNameSuffix struct {
 }
 
 var suffix = grqeNameSuffix{
-	//certSecret:       "-grqe-crt",	/*currently unused, see commented out code blocks*/
+	cert:               "-grqe-crt",
+	certSecret:         "-grqe-crtsecret",
 	grqeDeployment:     "-grqe-dep",
 	grqeService:        "-grqe-svc",
 	grqeWebhook:        ".mt-grqe.ibm",
@@ -180,8 +184,14 @@ func (r *ReconcileGroupResourceQuotaEnforcer) Reconcile(request reconcile.Reques
 	// Reconcile - create grqe-ca-cert (isCA) from grqe-ca-issuer
 	// Reconcile - create grqe-issuer referencing grqe-ca
 	// Reconcile - create gqre-cert from grqe-issuer
-	// Update deployments to use gqre-cert-secret created by certmanager
+	// Update deployments to use grqe-cert-secret created by certmanager
 	// Update CRD to no longer take certSecret spec param
+
+	// Reconcile the expected Certificate
+	recResult, recErr = r.certificateForCR(cr)
+	if recErr != nil || recResult.Requeue {
+		return recResult, recErr
+	}
 
 	// Reconcile the expected deployment
 	recResult, recErr = r.deploymentForCR(cr)
@@ -356,8 +366,8 @@ func (r *ReconcileGroupResourceQuotaEnforcer) deploymentForCR(cr *operatorv1alph
 						Name: "webhook-certs",
 						VolumeSource: corev1.VolumeSource{
 							Secret: &corev1.SecretVolumeSource{
-								//SecretName: cr.Name + suffix.certSecret,
-								SecretName:  cr.Spec.CertSecret,
+								SecretName: cr.Name + suffix.certSecret,
+								//SecretName:  cr.Spec.CertSecret,
 								DefaultMode: &int32_420,
 							},
 						},
@@ -478,8 +488,8 @@ func (r *ReconcileGroupResourceQuotaEnforcer) bridgeDeploymentForCR(cr *operator
 						Name: "webhook-certs",
 						VolumeSource: corev1.VolumeSource{
 							Secret: &corev1.SecretVolumeSource{
-								//SecretName: cr.Name + suffix.certSecret,
-								SecretName:  cr.Spec.CertSecret,
+								SecretName: cr.Name + suffix.certSecret,
+								//SecretName:  cr.Spec.CertSecret,
 								DefaultMode: &int32_420,
 							},
 						},
@@ -904,6 +914,77 @@ func (r *ReconcileGroupResourceQuotaEnforcer) webhookConfigForCR(cr *operatorv1a
 		err = r.client.Update(context.TODO(), foundWebhookConfig)
 		if err != nil {
 			reqLogger.Error(err, "Failed to update MutatingWebhookConfig", "Name", foundWebhookConfig.Name)
+			return reconcile.Result{}, err
+		}
+		// Deleted - return and requeue
+		return reconcile.Result{Requeue: true}, nil
+	}
+
+	// No reconcile was necessary
+	return reconcile.Result{}, nil
+}
+
+// IBMDEV webhookConfigForCR returns (reconcile.Result, error)
+func (r *ReconcileGroupResourceQuotaEnforcer) certificateForCR(cr *operatorv1alpha1.GroupResourceQuotaEnforcer) (reconcile.Result, error) {
+	reqLogger := log.WithValues("cr.Name", cr.Name)
+
+	ls := labelsForDeployment(cr.Name)
+
+	expectedRes := &certmanagerv1alpha1.Certificate{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cr.Name + suffix.cert,
+			Labels:    ls,
+			Namespace: cr.Spec.InstanceNamespace,
+		},
+		Spec: certmanagerv1alpha1.CertificateSpec{
+			SecretName: cr.Name + suffix.certSecret,
+			IsCA:       false,
+			DNSNames: []string{
+				cr.Name + suffix.grqeService,
+				cr.Name + suffix.grqeService + "." + cr.Spec.InstanceNamespace,
+				cr.Name + suffix.grqeService + "." + cr.Spec.InstanceNamespace + ".svc",
+				cr.Name + suffix.grqeService + "." + cr.Spec.InstanceNamespace + ".svc.cluster",
+				cr.Name + suffix.grqeService + "." + cr.Spec.InstanceNamespace + ".svc.cluster.local",
+			},
+			Organization: []string{"IBM"},
+			IssuerRef: certmanagerv1alpha1.ObjectReference{
+				Name: "icp-ca-issuer",
+				Kind: certmanagerv1alpha1.ClusterIssuerKind,
+			},
+		},
+	}
+	// Set CR instance as the owner and controller
+	err := controllerutil.SetControllerReference(cr, expectedRes, r.scheme)
+	if err != nil {
+		reqLogger.Error(err, "Failed to define expected resource")
+		return reconcile.Result{}, err
+	}
+
+	// If res does not exist, create it and requeue
+	foundRes := &certmanagerv1alpha1.Certificate{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: expectedRes.Name, Namespace: expectedRes.ObjectMeta.Namespace}, foundRes)
+	if err != nil && errors.IsNotFound(err) {
+		reqLogger.Info("Creating a new Certificate", "Namespace", expectedRes.ObjectMeta.Namespace, "Name", expectedRes.Name)
+		err = r.client.Create(context.TODO(), expectedRes)
+		if err != nil && errors.IsAlreadyExists(err) {
+			// Already exists from previous reconcile, requeue.
+			return reconcile.Result{Requeue: true}, nil
+		} else if err != nil {
+			reqLogger.Error(err, "Failed to create new Certificate", "Namespace", expectedRes.ObjectMeta.Namespace, "Name", expectedRes.Name)
+			return reconcile.Result{}, err
+		}
+		// Created successfully - return and requeue
+		return reconcile.Result{Requeue: true}, nil
+	} else if err != nil {
+		reqLogger.Error(err, "Failed to get Certificate")
+		return reconcile.Result{}, err
+	} else if !reflect.DeepEqual(foundRes.Spec, expectedRes.Spec) {
+		// Spec is incorrect, update it and requeue
+		reqLogger.Info("Found Certificate is incorrect", "Found", foundRes.Spec, "Expected", expectedRes.Spec)
+		foundRes.Spec = expectedRes.Spec
+		err = r.client.Update(context.TODO(), foundRes)
+		if err != nil {
+			reqLogger.Error(err, "Failed to update Certificate", "Name", foundRes.Name, "Namespace", foundRes.ObjectMeta.Namespace)
 			return reconcile.Result{}, err
 		}
 		// Deleted - return and requeue
