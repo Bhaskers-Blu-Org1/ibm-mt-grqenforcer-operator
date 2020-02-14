@@ -343,8 +343,8 @@ func (r *ReconcileGroupResourceQuotaEnforcer) deploymentForCR(cr *operatorv1alph
 						ImagePullPolicy: "IfNotPresent",
 						Args: []string{
 							"-port=7443",
-							"-tlsCertFile=/etc/webhook/certs/cert.pem",
-							"-tlsKeyFile=/etc/webhook/certs/key.pem",
+							"-tlsCertFile=/etc/webhook/certs/tls.crt",
+							"-tlsKeyFile=/etc/webhook/certs/tls.key",
 							"-alsologtostderr",
 							"-v=4",
 							"2>&1",
@@ -465,8 +465,8 @@ func (r *ReconcileGroupResourceQuotaEnforcer) bridgeDeploymentForCR(cr *operator
 						ImagePullPolicy: "IfNotPresent",
 						Args: []string{
 							"-port=7443",
-							"-tlsCertFile=/etc/webhook/certs/cert.pem",
-							"-tlsKeyFile=/etc/webhook/certs/key.pem",
+							"-tlsCertFile=/etc/webhook/certs/tls.crt",
+							"-tlsKeyFile=/etc/webhook/certs/tls.key",
 							"-alsologtostderr",
 							"-v=4",
 							"2>&1",
@@ -856,6 +856,9 @@ func (r *ReconcileGroupResourceQuotaEnforcer) webhookConfigForCR(cr *operatorv1a
 	expectedRes := &admissionv1beta1.MutatingWebhookConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: cr.Name + suffix.grqeWebhook,
+			Annotations: map[string]string{
+				"certmanager.k8s.io/inject-ca-from": cr.Spec.InstanceNamespace + "/" + cr.Name + suffix.certSecret,
+			},
 		},
 		Webhooks: []admissionv1beta1.MutatingWebhook{{
 			Name: cr.Name + suffix.grqeWebhook,
