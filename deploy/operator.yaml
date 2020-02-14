@@ -31,11 +31,11 @@ spec:
                   fieldPath: metadata.name
             - name: OPERATOR_NAME
               value: "ibm-mt-grqenforcer-operator"
-          volumeMounts:
-            - name: webhook-certs
-              mountPath: /etc/webhook/certs
-              readOnly: true
-      volumes:
-        - name: webhook-certs
-          secret:
-            secretName: ca-cert-secret
+          #volumeMounts:
+          #  - name: webhook-certs
+          #    mountPath: /etc/webhook/certs
+          #    readOnly: true
+      #volumes:
+      #  - name: webhook-certs
+      #    secret:
+      #      secretName: ca-cert-secret
