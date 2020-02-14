@@ -168,17 +168,17 @@ endif
 
 
 build-image-amd64: build-amd64
-	@docker build -t $(REGISTRY)/$(IMG)-amd64:$(VERSION) $(DOCKER_BUILD_OPTS) --build-arg "IMAGE_NAME_ARCH=$(IMAGE_NAME)-amd64" -f build/Dockerfile .
+	@docker build -t $(REGISTRY)/$(IMG)-amd64:$(VERSION) $(DOCKER_BUILD_OPTS) --build-arg "IMAGE_NAME_ARCH=$(IMAGE_NAME)-amd64" --build-arg "BINARY_ARCH=" -f build/Dockerfile .
 
 build-image-ppc64le: build-ppc64le
 	cp build/Dockerfile build/Dockerfile.ppc64le
 	@docker run --rm --privileged multiarch/qemu-user-static:register --reset
-	@docker build -t $(REGISTRY)/$(IMG)-ppc64le:$(VERSION) $(DOCKER_BUILD_OPTS) --build-arg "IMAGE_NAME_ARCH=$(IMAGE_NAME)-ppc64le" -f build/Dockerfile.ppc64le .
+	@docker build -t $(REGISTRY)/$(IMG)-ppc64le:$(VERSION) $(DOCKER_BUILD_OPTS) --build-arg "IMAGE_NAME_ARCH=$(IMAGE_NAME)-ppc64le" --build-arg "BINARY_ARCH=-ppc64le" -f build/Dockerfile.ppc64le .
 
 build-image-s390x: build-s390x
 	cp build/Dockerfile build/Dockerfile.s390x
 	@docker run --rm --privileged multiarch/qemu-user-static:register --reset
-	@docker build -t $(REGISTRY)/$(IMG)-s390x:$(VERSION) $(DOCKER_BUILD_OPTS) --build-arg "IMAGE_NAME_ARCH=$(IMAGE_NAME)-s390x" -f build/Dockerfile.s390x .
+	@docker build -t $(REGISTRY)/$(IMG)-s390x:$(VERSION) $(DOCKER_BUILD_OPTS) --build-arg "IMAGE_NAME_ARCH=$(IMAGE_NAME)-s390x" --build-arg "BINARY_ARCH=-s390x" -f build/Dockerfile.s390x .
 
 push-image-amd64: $(CONFIG_DOCKER_TARGET) build-image-amd64
 	@docker push $(REGISTRY)/$(IMG)-amd64:$(VERSION)
