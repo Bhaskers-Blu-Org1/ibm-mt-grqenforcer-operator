@@ -22,7 +22,9 @@ BUILD_LOCALLY ?= 1
 # Use your own docker registry and image name for dev/test by overridding the IMG and REGISTRY environment variable.
 # IBMDEV Set image and repo
 IMG ?= ibm-mt-grqe-operator-image
+BINARY ?= ibm-mt-grqe-operator-bin
 REGISTRY ?= quay.io/opencloudio
+CSV_VERSION ?= $(VERSION)
 
 # Github host to use for checking the source tree;
 # Override this variable ue with your own value if you're working on forked repo.
@@ -52,6 +54,25 @@ else ifeq ($(LOCAL_OS),Darwin)
 else
     $(error "This system's OS $(LOCAL_OS) isn't recognized/supported")
 endif
+
+#IBMDEV
+# Setup DOCKER_BUILD_OPTS after all includes complete
+#Variables for redhat ubi certification required labels
+IMAGE_NAME=$(IMG)
+IMAGE_DISPLAY_NAME=IBM GroupResourceQuota Enforcer Operator
+IMAGE_MAINTAINER=carrolp@us.ibm.com
+IMAGE_VENDOR=IBM
+IMAGE_VERSION=$(VERSION)
+IMAGE_DESCRIPTION=Operator used to install a service to enforce GroupResourceQuotas in a kubernetes cluster
+IMAGE_SUMMARY=$(IMAGE_DESCRIPTION)
+IMAGE_OPENSHIFT_TAGS=quotas
+$(eval WORKING_CHANGES := $(shell git status --porcelain))
+$(eval BUILD_DATE := $(shell date +%m/%d@%H:%M:%S))
+$(eval GIT_COMMIT := $(shell git rev-parse --short HEAD))
+$(eval VCS_REF := $(GIT_COMMIT))
+IMAGE_RELEASE=$(VCS_REF)
+GIT_REMOTE_URL = $(shell git config --get remote.origin.url)
+$(eval DOCKER_BUILD_OPTS := --build-arg "IMAGE_NAME=$(IMAGE_NAME)" --build-arg "IMAGE_DISPLAY_NAME=$(IMAGE_DISPLAY_NAME)" --build-arg "IMAGE_MAINTAINER=$(IMAGE_MAINTAINER)" --build-arg "IMAGE_VENDOR=$(IMAGE_VENDOR)" --build-arg "IMAGE_VERSION=$(IMAGE_VERSION)" --build-arg "IMAGE_RELEASE=$(IMAGE_RELEASE)" --build-arg "IMAGE_DESCRIPTION=$(IMAGE_DESCRIPTION)" --build-arg "IMAGE_SUMMARY=$(IMAGE_SUMMARY)" --build-arg "IMAGE_OPENSHIFT_TAGS=$(IMAGE_OPENSHIFT_TAGS)" --build-arg "VCS_REF=$(VCS_REF)" --build-arg "VCS_URL=$(GIT_REMOTE_URL)" --build-arg "SELF_METER_IMAGE_TAG=$(SELF_METER_IMAGE_TAG)")
 
 all: fmt check test coverage build images
 
@@ -122,19 +143,19 @@ install-operator-sdk:
 build: build-amd64 build-ppc64le build-s390x
 
 build-amd64:
-	@echo "Building the ${IMG} amd64 binary..."
-	@GOARCH=amd64 common/scripts/gobuild.sh build/_output/bin/$(IMG) ./cmd/manager
+	@echo "Building the ${BINARY} amd64 binary..."
+	@GOARCH=amd64 common/scripts/gobuild.sh build/_output/bin/$(BINARY) ./cmd/manager
 
 build-ppc64le:
-	@echo "Building the ${IMG} ppc64le binary..."
-	@GOARCH=ppc64le common/scripts/gobuild.sh build/_output/bin/$(IMG)-ppc64le ./cmd/manager
+	@echo "Building the ${BINARY} ppc64le binary..."
+	@GOARCH=ppc64le common/scripts/gobuild.sh build/_output/bin/$(BINARY)-ppc64le ./cmd/manager
 
 build-s390x:
-	@echo "Building the ${IMG} s390x binary..."
-	@GOARCH=s390x common/scripts/gobuild.sh build/_output/bin/$(IMG)-s390x ./cmd/manager
+	@echo "Building the ${BINARY} s390x binary..."
+	@GOARCH=s390x common/scripts/gobuild.sh build/_output/bin/$(BINARY)-s390x ./cmd/manager
 
 local:
-	@GOOS=darwin common/scripts/gobuild.sh build/_output/bin/$(IMG) ./cmd/manager
+	@GOOS=darwin common/scripts/gobuild.sh build/_output/bin/$(BINARY) ./cmd/manager
 
 ############################################################
 # images section
@@ -147,15 +168,17 @@ endif
 
 
 build-image-amd64: build-amd64
-	@docker build -t $(REGISTRY)/$(IMG)-amd64:$(VERSION) $(DOCKER_BUILD_OPTS) --build-arg "IMAGE_NAME_ARCH=$(IMAGE_NAME)-amd64" -f build/Dockerfile .
+	@docker build -t $(REGISTRY)/$(IMG)-amd64:$(VERSION) $(DOCKER_BUILD_OPTS) --build-arg "IMAGE_NAME_ARCH=$(IMAGE_NAME)-amd64" --build-arg "BINARY_ARCH=" -f build/Dockerfile .
 
 build-image-ppc64le: build-ppc64le
+	cp build/Dockerfile build/Dockerfile.ppc64le
 	@docker run --rm --privileged multiarch/qemu-user-static:register --reset
-	@docker build -t $(REGISTRY)/$(IMG)-ppc64le:$(VERSION) $(DOCKER_BUILD_OPTS) --build-arg "IMAGE_NAME_ARCH=$(IMAGE_NAME)-ppc64le" -f build/Dockerfile.ppc64le .
+	@docker build -t $(REGISTRY)/$(IMG)-ppc64le:$(VERSION) $(DOCKER_BUILD_OPTS) --build-arg "IMAGE_NAME_ARCH=$(IMAGE_NAME)-ppc64le" --build-arg "BINARY_ARCH=-ppc64le" -f build/Dockerfile.ppc64le .
 
 build-image-s390x: build-s390x
+	cp build/Dockerfile build/Dockerfile.s390x
 	@docker run --rm --privileged multiarch/qemu-user-static:register --reset
-	@docker build -t $(REGISTRY)/$(IMG)-s390x:$(VERSION) $(DOCKER_BUILD_OPTS) --build-arg "IMAGE_NAME_ARCH=$(IMAGE_NAME)-s390x" -f build/Dockerfile.s390x .
+	@docker build -t $(REGISTRY)/$(IMG)-s390x:$(VERSION) $(DOCKER_BUILD_OPTS) --build-arg "IMAGE_NAME_ARCH=$(IMAGE_NAME)-s390x" --build-arg "BINARY_ARCH=-s390x" -f build/Dockerfile.s390x .
 
 push-image-amd64: $(CONFIG_DOCKER_TARGET) build-image-amd64
 	@docker push $(REGISTRY)/$(IMG)-amd64:$(VERSION)
