@@ -179,20 +179,6 @@ func (r *ReconcileGroupResourceQuotaEnforcer) Reconcile(request reconcile.Reques
 	var recResult reconcile.Result
 	var recErr error
 
-	// TODO:
-	// Reconcile - create grqe-ca-issuer (self signed)
-	// Reconcile - create grqe-ca-cert (isCA) from grqe-ca-issuer
-	// Reconcile - create grqe-issuer referencing grqe-ca
-	// Reconcile - create gqre-cert from grqe-issuer
-	// Update deployments to use grqe-cert-secret created by certmanager
-	// Update CRD to no longer take certSecret spec param
-
-	// Reconcile the expected Certificate
-	recResult, recErr = r.certificateForCR(cr)
-	if recErr != nil || recResult.Requeue {
-		return recResult, recErr
-	}
-
 	// Reconcile the expected deployment
 	recResult, recErr = r.deploymentForCR(cr)
 	if recErr != nil || recResult.Requeue {
@@ -237,6 +223,20 @@ func (r *ReconcileGroupResourceQuotaEnforcer) Reconcile(request reconcile.Reques
 
 	// Reconcile the expected MutatingWebhookConfig
 	recResult, recErr = r.webhookConfigForCR(cr)
+	if recErr != nil || recResult.Requeue {
+		return recResult, recErr
+	}
+
+	// TODO:
+	// Reconcile - create grqe-ca-issuer (self signed)
+	// Reconcile - create grqe-ca-cert (isCA) from grqe-ca-issuer
+	// Reconcile - create grqe-issuer referencing grqe-ca
+	// Reconcile - create gqre-cert from grqe-issuer
+	// Update deployments to use grqe-cert-secret created by certmanager
+	// Update CRD to no longer take certSecret spec param
+
+	// Reconcile the expected Certificate
+	recResult, recErr = r.certificateForCR(cr)
 	if recErr != nil || recResult.Requeue {
 		return recResult, recErr
 	}

@@ -17,8 +17,8 @@ spec:
         - name: ibm-mt-grqenforcer-operator
           # Replace this with the built image name
           image: quay.io/opencloudio/ibm-mt-grqe-operator-image:latest
-          command:
-          - ibm-mt-grqenforcer-operator
+          #command:
+          #- ibm-mt-grqenforcer-operator-bin
           # args:
           # - -tlsCertFile=/etc/webhook/certs/cert.pem
           imagePullPolicy: Always
