@@ -857,7 +857,7 @@ func (r *ReconcileGroupResourceQuotaEnforcer) webhookConfigForCR(cr *operatorv1a
 		ObjectMeta: metav1.ObjectMeta{
 			Name: cr.Name + suffix.grqeWebhook,
 			Annotations: map[string]string{
-				"certmanager.k8s.io/inject-ca-from": cr.Spec.InstanceNamespace + "/" + cr.Name + suffix.certSecret,
+				"certmanager.k8s.io/inject-ca-from": cr.Spec.InstanceNamespace + "/" + cr.Name + suffix.cert,
 			},
 		},
 		Webhooks: []admissionv1beta1.MutatingWebhook{{
