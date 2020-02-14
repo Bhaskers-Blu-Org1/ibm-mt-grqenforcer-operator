@@ -37,7 +37,7 @@ ENV OPERATOR=/usr/local/bin/ibm-mt-grqenforcer-operator-bin \
     USER_NAME=ibm-mt-grqenforcer-operator-usr
 
 # install operator binary
-COPY build/_output/bin/ibm-mt-grqenforcer-operator-bin${BINARY_ARCH} ${OPERATOR}
+COPY build/_output/bin/${BINARY_ARCH} ${OPERATOR}
 
 COPY build/bin /usr/local/bin
 RUN /usr/local/bin/user_setup
