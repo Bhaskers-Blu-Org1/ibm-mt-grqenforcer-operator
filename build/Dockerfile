@@ -14,6 +14,8 @@ ARG SELF_METER_IMAGE_TAG
 ARG VCS_REF
 ARG VCS_URL
 
+ARG BINARY_ARCH
+
 LABEL org.label-schema.vendor="$IMAGE_VENDOR" \
       org.label-schema.name="$IMAGE_NAME_ARCH" \
       org.label-schema.description="$IMAGE_DESCRIPTION" \
